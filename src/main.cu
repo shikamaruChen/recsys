@@ -18,12 +18,12 @@ cusparseMatDescr_t Sparse::descr_U;
 
 #define PATH_SIZE 100
 
-float alpha = 0.7f;
+float alpha = 0.1f;
 float beta = 0.1f;
 float lambda = 0.1f;
 float mu = 0.1f;
-float alpha1 = 0.000001;
-float alpha2 = 0.000001;
+float alpha1 = 0.000001f;
+float alpha2 = 0.000001f;
 float mu1 = 0.1f;
 float mu2 = 0.1f;
 int k = 100;
@@ -56,7 +56,7 @@ void usage() {
 }
 
 void print() {
-	printf("Algorithm: %s\n", methodname);
+	printf("Algorithm: %s\n", methodname.c_str());
 	printf("parameter setting:\n");
 	printf("maxiter=%d\n", maxiter);
 	printf("alpha=%f\n", alpha);
@@ -275,17 +275,18 @@ void run(int argc, char* argv[]) {
 }
 
 void test() {
-	initial();
-	Sparse* s = new Sparse;
-	s->readCSR("dataset/s");
-	s->printFull();
-	Dense* d = new Dense;
-	d->input("dataset/v2");
-	d->print();
-	Sparse* r = new Sparse;
-	s->diagTimes(r, d, true);
-	r->printFull();
-	clean();
+//	initial();
+//	Sparse* s = new Sparse;
+//	s->readCSR("dataset/s");
+//	s->printFull();
+//	Dense* d = new Dense;
+//	d->input("dataset/v2");
+//	d->print();
+//	Sparse* r = new Sparse;
+//	s->diagTimes(r, d, true);
+//	r->printFull();
+//	clean();
+
 }
 //-H -d /home/yifan/dataset/nips -a 0.5 -k 100 -M 100
 int main(int argc, char* argv[]) {

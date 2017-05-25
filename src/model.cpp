@@ -51,36 +51,47 @@ void Model::crossValidation() {
 	int Ns[] = { 0, 5, 10, 15, 20 };
 	int u = 0;
 	for (int user = 0; user < Nu; ++user) {
+		if (R->row[user + 1] - R->row[user] == 0)
+			continue;
 		int start = test->row[user];
 		int end = test->row[user + 1];
 		int nnz = end - start;
 		if (nnz == 0)
 			continue;
+		valid++;
 		std::set<int> test_user;
 		for (int t = 0; t < nnz; t++)
 			test_user.insert(test->col[start + t]);
+//		printf("test items:");
+//		for (int item : test_user)
+//			printf("%d ", item);
+
 //		int rank;
 //		for (rank = 0; rank < 20; ++rank)
 //			if (test->col[u] == order[rank + user * Ni])
 //				break;
 //		u++;
-		double recall = 0;
-		double dcg = 0;
+		float recall = 0;
+		float dcg = 0;
+//		printf("recommend items:");
 		for (int n = 0; n < 4; ++n) {
 			for (int s = Ns[n]; s < Ns[n + 1]; s++) {
+//				std::cout<<order[s + user * Ni]<<" ";
 				if (test_user.find(order[s + user * Ni]) != test_user.end()) {
 					recall++;
 					dcg += log(s + 1) / log(2);
 				}
 			}
-			REC[n] = recall / nnz;
-			DCG[n] = dcg / Ns[n + 1];
+			REC[n] += recall / nnz;
+			DCG[n] += dcg / Ns[n + 1];
 		}
+//		printf("\n");
 //			if (rank < Ns[n]) {
 //				HR[n] += 1;
 //				ARHR[n] += 1.0 / (rank + 1);
 //			}
 	}
+	printf("valid=%d\n", valid);
 	thrust::device_free(order);
 }
 

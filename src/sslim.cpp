@@ -25,13 +25,13 @@ void SSLIM::record(const char* filename) {
 				ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 	} else {
 		printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, alpha,
-				beta, lambda, REC[0] / test->nnz, REC[1] / test->nnz,
-				REC[2] / test->nnz, REC[3] / test->nnz, DCG[0] / test->nnz,
-				DCG[1] / test->nnz, DCG[2] / test->nnz, DCG[3] / test->nnz);
+				beta, lambda, REC[0] / valid, REC[1] / valid, REC[2] / valid,
+				REC[3] / valid, DCG[0] / valid, DCG[1] / valid, DCG[2] / valid,
+				DCG[3] / valid);
 		fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
-				alpha, beta, lambda, REC[0] / test->nnz, REC[1] / test->nnz,
-				REC[2] / test->nnz, REC[3] / test->nnz, DCG[0] / test->nnz,
-				DCG[1] / test->nnz, DCG[2] / test->nnz, DCG[3] / test->nnz);
+				alpha, beta, lambda, REC[0] / valid, REC[1] / valid,
+				REC[2] / valid, REC[3] / valid, DCG[0] / valid, DCG[1] / valid,
+				DCG[2] / valid, DCG[3] / valid);
 	}
 	fclose(file);
 }

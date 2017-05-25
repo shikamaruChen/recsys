@@ -16,18 +16,32 @@ __global__ void predictKernel(int*row1, int*col1, float*v1, int*row2, int*col2,
 		float*v2, int*row3, int*col3, float*d, float*tR, int m, int n);
 
 void UFSM::record(const char* filename) {
-	printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
-			l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
-			ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
-			HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
-			ARHR[3] / test->nnz);
 	FILE*file = fopen(filename, "a");
-	fprintf(file,
-			"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-			fold, l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
-			ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
-			HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
-			ARHR[3] / test->nnz);
+	if (LOO) {
+		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+				fold, l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
+				ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
+				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
+				ARHR[3] / test->nnz);
+		fprintf(file,
+				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+				fold, l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
+				ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
+				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
+				ARHR[3] / test->nnz);
+	} else {
+		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+				fold, l, lambda, alpha1, alpha2, mu1, mu2, REC[0] / test->nnz,
+				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
+				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
+				DCG[3] / test->nnz);
+		fprintf(file,
+				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
+				fold, l, lambda, alpha1, alpha2, mu1, mu2, REC[0] / test->nnz,
+				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
+				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
+				DCG[3] / test->nnz);
+	}
 	fclose(file);
 }
 
@@ -104,9 +118,14 @@ void UFSMrmse::learn() {
 	for (int iter = 1; iter <= maxiter; ++iter) {
 		printf("---------- iter:%d ------------\n", iter);
 		for (int u = 0; u < Nu; ++u) {
+			if (R->row[u + 1] - R->row[u] == 0)
+				continue;
 			sample(u, i1, i2);
+//			printf("(%d,%d,%d)\n", u, i1, i2);
 			update(u, i1); //positive sample
+//			printf("success positive update\n");
 			update(u, i2); //negative sample
+//			printf("success negative update\n");
 		}
 		printf("obj=%f\n", object());
 	}

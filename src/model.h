@@ -22,6 +22,7 @@ public:
 	int Nf = 0;
 	int Nu = 0;
 	int Ni = 0;
+	int valid = 0;
 	float HR[4];
 	float ARHR[4];
 	float REC[4];
@@ -36,6 +37,8 @@ public:
 		pR = new Dense;
 		memset(HR, 0, sizeof(HR));
 		memset(ARHR, 0, sizeof(ARHR));
+		memset(REC, 0, sizeof(REC));
+		memset(DCG, 0, sizeof(DCG));
 	}
 	virtual void record(const char*)=0;
 	virtual void learn() = 0;
