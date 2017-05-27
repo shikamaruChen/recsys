@@ -39,7 +39,7 @@
 
 class Dense {
 public:
-	float*cu_val = 0;
+	double*cu_val = 0;
 	thrust::device_ptr<float> val;
 	int m, n;
 public:
