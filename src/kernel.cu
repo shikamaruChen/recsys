@@ -333,6 +333,14 @@ __global__ void lossfuncKernel(float*v, int*row, int*col, int m, int n,
 		}
 	}
 }
+
+__global__ void plusDiagKernel(float*A, float*d, float a, float b, int m,
+		int n) {
+	int x = blockDim.x * blockIdx.x + threadIdx.x;
+	if (x < m && x < n) {
+		A[x * (m + 1)] = a * A[x * (m + 1)] + b * d[x];
+	}
+}
 //__global__ void lossfuncKernel(float*R, float*pR, int m, int n, float*d) {
 //	int x = blockDim.x * blockIdx.x + threadIdx.x;
 //	int y = blockDim.y * blockIdx.y + threadIdx.y;

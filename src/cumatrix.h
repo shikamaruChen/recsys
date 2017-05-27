@@ -59,6 +59,7 @@ public:
 	void eig(Dense*D);
 	void eig(Dense*Q, Dense*D);
 	void eigs(int k, Dense*Q);
+	void svd(Dense*U, Dense*V, Dense*S);
 	void eTimes(Dense*);
 	void eTimes(Dense*, float a);
 	float frobenius();
@@ -76,13 +77,16 @@ public:
 	void ltimesDiag(Dense*, Dense*, float alpha, bool trans);
 	void initial(int m, int n);
 	void input(const char*);
-	void inv();
+	void inv(Dense*);
 	float norm1();
 	float norm2();
 	void orth();
 	void plus(float, float);
 	void plus(Dense*, float, float, bool);
 	void plus(Dense*r, Dense*d, float, float, bool, bool);
+	void plusDiag(Dense*r, Dense*d, float, float, bool);
+	void plusDiag(Dense*d, float, float);
+	void plusDiag(float, float);
 	void pow(float ind);
 	void print();
 	void print(const char*);
@@ -104,7 +108,7 @@ public:
 	void setValue(float v);
 	void shrink(float tau);
 	void signPlus(Dense*, float);
-	void solve(Dense*x, Dense*b);
+	void solve(Dense*);
 //	void sortKeyCol()
 	thrust::device_ptr<int> sortKeyCol(bool greater);
 	thrust::device_ptr<int> sortKeyRow(bool greater);
@@ -173,9 +177,11 @@ public:
 	void initialBoth();
 	void initialCSC();
 	void initialCSR();
-	void innerTimes(Sparse*);
+	void innerTimes(Sparse*);	//S*St
+	void innerTimes(Dense*B, Dense*A);	//B=S*A*St
+	void outerTimes(Sparse*);	//St*S
+	void outerTimes(Dense*B, Dense*A);	//B=St*A*S
 	void inv(Dense*);
-	void outerTimes(Sparse*);
 	void plus(Dense*r, float, float, bool);
 	void plus(Sparse*, Sparse*, float, float);
 	void print();

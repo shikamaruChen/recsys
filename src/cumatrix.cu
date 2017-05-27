@@ -30,6 +30,65 @@ __global__ void repmatKernel(float*r, float*d, int mm, int mn, int m, int n);
 __global__ void subvecKernel(int*row, int*col, int r, float*v, float*d);
 __global__ void getRowKernel(float*v, float*d, int r, int m, int n);
 __global__ void setRowKernel(float*v, float*d, int r, int m, int n);
+__global__ void plusDiagKernel(float*A, float*d, float a, float b, int m,
+		int n);
+
+void Dense::clean() {
+	if (cu_val)
+		checkCudaErrors(cudaFree(cu_val));
+	cu_val = 0;
+}
+
+void Dense::clone(Dense*d) {
+	d->clean();
+	d->initial(m, n);
+	int len = length();
+	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
+	//cudaMemcpy(d->cu_val, cu_val, sizeof(float)*m*n, cudaMemcpyDeviceToDevice);
+}
+
+void Dense::copyto(Dense* d) {
+	int len = length();
+	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
+}
+
+float Dense::dot(Dense* d) {
+	int n = length();
+	float res;
+	checkCudaErrors(cublasSdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
+	return res;
+}
+
+void Dense::ger(Dense*x, Dense*y, float a) {
+	checkCudaErrors(
+			cublasSger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
+}
+
+void Dense::initial(int m, int n) {
+	this->m = m;
+	this->n = n;
+	//printf("m=%d,n=%d\n", m, n);
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
+	val = thrust::device_pointer_cast(cu_val);
+}
+
+void Dense::input(const char* filename) {
+	FILE* file = fopen(filename, "r");
+	fscanf(file, "%d %d", &m, &n);
+	size_t size = sizeof(float) * m * n;
+	float*elem = (float*) malloc(size);
+	//int len = m*n;
+	int i, j;
+	for (i = 0; i < m; ++i)
+		for (j = 0; j < n; ++j)
+			fscanf(file, "%f", &elem[i + j * m]);
+	//PRINT_MATRIX(val,m,n);
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
+	checkCudaErrors(cudaMemcpy(cu_val, elem, size, cudaMemcpyHostToDevice));
+	val = thrust::device_pointer_cast(cu_val);
+	fclose(file);
+	free(elem);
+}
 
 void Dense::setRandom() {
 	curandGenerator_t gen;
@@ -69,39 +128,6 @@ float Dense::getElem(int i, int j) {
 	return val[i + j * m];
 }
 
-void Dense::input(const char* filename) {
-	FILE* file = fopen(filename, "r");
-	fscanf(file, "%d %d", &m, &n);
-	size_t size = sizeof(float) * m * n;
-	float*elem = (float*) malloc(size);
-	//int len = m*n;
-	int i, j;
-	for (i = 0; i < m; ++i)
-		for (j = 0; j < n; ++j)
-			fscanf(file, "%f", &elem[i + j * m]);
-	//PRINT_MATRIX(val,m,n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
-	checkCudaErrors(cudaMemcpy(cu_val, elem, size, cudaMemcpyHostToDevice));
-	val = thrust::device_pointer_cast(cu_val);
-	fclose(file);
-	free(elem);
-}
-
-float Dense::dot(Dense* d) {
-	int n = length();
-	float res;
-	checkCudaErrors(cublasSdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
-	return res;
-}
-
-void Dense::initial(int m, int n) {
-	this->m = m;
-	this->n = n;
-	//printf("m=%d,n=%d\n", m, n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
-	val = thrust::device_pointer_cast(cu_val);
-}
-
 void Dense::transpose(Dense* trans) {
 	int m = this->n;
 	int n = this->m;
@@ -119,30 +145,6 @@ void Dense::transpose() {
 	clean();
 	trans->clone(this);
 	delete trans;
-}
-
-void Dense::clean() {
-	if (cu_val)
-		checkCudaErrors(cudaFree(cu_val));
-	cu_val = 0;
-}
-
-void Dense::copyto(Dense* d) {
-	int len = length();
-	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
-}
-
-void Dense::clone(Dense*d) {
-	d->clean();
-	d->initial(m, n);
-	int len = length();
-	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
-	//cudaMemcpy(d->cu_val, cu_val, sizeof(float)*m*n, cudaMemcpyDeviceToDevice);
-}
-
-void Dense::ger(Dense*x, Dense*y, float a) {
-	checkCudaErrors(
-			cublasSger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
 }
 
 void Dense::colSum(Dense* vec) {
@@ -299,17 +301,39 @@ void Dense::orth() {
 		checkCudaErrors(cudaFree(tau));
 }
 
-void Dense::inv() {
-	int lbuffer;
-	int lbuffer_geqrf = 0;
-	int lbuffer_ormqr = 0;
-	int*info = NULL;
-	float*buffer = NULL;
-	float*tau = NULL;
+void Dense::inv(Dense*B) {
+	if (m != n) {
+		printf("not square\n");
+		return;
+	}
+	B->clean();
+	B->initial(m, m);
+	B->setIdentity();
+	solve(B);
+}
+
+void Dense::svd(Dense*U, Dense*V, Dense*S) {
+	if (m < n) {
+		printf("only support m>=n\n");
+		return;
+	}
+	U->clean();
+	U->initial(m, m);
+	V->clean();
+	V->initial(n, n);
+	S->clean();
+	S->initial(n, 1);
+	int lwork = 0;
+	checkCudaErrors(cusolverDnSgesvd_bufferSize(solver_handle, m, n, &lwork));
+	float*work = 0;
+	float*rwork = 0;
+	int*devInfo = 0;
+	checkCudaErrors(cudaMalloc((void** )&devInfo, sizeof(int)));
+	checkCudaErrors(cudaMalloc((void** )&work, sizeof(float) * lwork));
 	checkCudaErrors(
-			cusolverDnSgeqrf_bufferSize(solver_handle, m, m, cu_val, m,
-					&lbuffer_geqrf));
-//	checkCudaErrors(cusolverDnSormqr_bufferSize(solver_handle,CUBLAS_SIDE_LEFT,CUBLAS_OP_T,n,1,n,cu_val,m,NULL,))
+			cusolverDnSgesvd(solver_handle, 'A', 'A', m, n, cu_val, m,
+					S->cu_val, U->cu_val, m, V->cu_val, n, work, lwork, rwork,
+					devInfo));
 }
 
 void Dense::print() {
@@ -571,7 +595,30 @@ void Dense::plus(Dense* res, Dense* d, float a, float b, bool tA, bool tB) {
 	}
 }
 
-void Dense::solve(Dense*x, Dense*b) {
+void Dense::plusDiag(Dense*r, Dense*d, float a, float b, bool tran) {
+	if (!tran)
+		clone(r);
+	else
+		transpose(r);
+	r->plusDiag(d, a, b);
+}
+
+void Dense::plusDiag(Dense*d, float a, float b) {
+	int thread = THREADS;
+	int block = (m + thread - 1) / thread;
+	plusDiagKernel<<<block, thread>>>(cu_val, d->cu_val, a, b, m, n);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::plusDiag(float a, float b) {
+	Dense*I = new Dense;
+	I->initial(m, 1);
+	I->setValue(1.0f);
+	plusDiag(I, a, b);
+	delete I;
+}
+
+void Dense::solve(Dense*x) {
 	int size = 0;
 	float* buffer = 0;
 	float* tau = 0;
@@ -591,16 +638,16 @@ void Dense::solve(Dense*x, Dense*b) {
 	if (0 != h_info) {
 		fprintf(stderr, "Error: LU factorization failed\n");
 	}
-	x->initial(b->m, b->n);
-	checkCudaErrors(
-			cudaMemcpy(x->cu_val, b->cu_val, sizeof(float) * b->length(),
-					cudaMemcpyDeviceToDevice));
+//	x->initial(b->m, b->n);
+//	checkCudaErrors(
+//			cudaMemcpy(x->cu_val, b->cu_val, sizeof(float) * b->length(),
+//					cudaMemcpyDeviceToDevice));
 	checkCudaErrors(
 			cusolverDnSormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, x->m,
 					x->n, m, cu_val, m, tau, x->cu_val, x->m, buffer, size,
 					info));
 	checkCudaErrors(
-			cublasStrsm(handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, b->m, b->n, &one, cu_val, m, x->cu_val, x->m));
+			cublasStrsm(handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, x->m, x->n, &one, cu_val, m, x->cu_val, x->m));
 	checkCudaErrors(cudaFree(buffer));
 	checkCudaErrors(cudaFree(tau));
 	checkCudaErrors(cudaFree(info));
@@ -1222,8 +1269,24 @@ void Sparse::outerTimes(Sparse* s) {
 	times(s, this, true, false);
 }
 
+void Sparse::outerTimes(Dense*B, Dense*A) {
+	Dense*T = new Dense;
+	times(T, A, true, false);
+	times(B, T, true, true);
+	B->transpose();
+	delete T;
+}
+
 void Sparse::innerTimes(Sparse* s) {
 	times(s, this, false, true);
+}
+
+void Sparse::innerTimes(Dense*B, Dense*A) {
+	Dense*T = new Dense;
+	times(T, A, false, false);
+	times(B, T, false, true);
+	B->transpose();
+	delete T;
 }
 
 void Sparse::uploadCSR(int* row, int* col, float* val) {

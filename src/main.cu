@@ -8,6 +8,7 @@
 #include "lce.h"
 #include "content.h"
 #include "fsm.h"
+#include "pcf.h"
 
 cusparseHandle_t Sparse::handle;
 cublasHandle_t Dense::handle;
@@ -231,6 +232,10 @@ void run(int argc, char* argv[]) {
 		recsys = new FSMrec(alpha, lambda, maxiter, fold);
 		methodname = "fsm";
 		break;
+	case 10:
+		recsys = new PCF(alpha, beta, k, maxiter, fold);
+		methodname = "pcf";
+		break;
 	}
 	print();
 	std::string::size_type i;
@@ -275,22 +280,16 @@ void run(int argc, char* argv[]) {
 }
 
 void test() {
-//	initial();
-//	Sparse* s = new Sparse;
-//	s->readCSR("dataset/s");
-//	s->printFull();
-//	Dense* d = new Dense;
-//	d->input("dataset/v2");
-//	d->print();
-//	Sparse* r = new Sparse;
-//	s->diagTimes(r, d, true);
-//	r->printFull();
-//	clean();
+	initial();
+
+	float f = 3.330669073875470e-16;
+	printf("%f\n",f);
+	clean();
 
 }
 //-H -d /home/yifan/dataset/nips -a 0.5 -k 100 -M 100
 int main(int argc, char* argv[]) {
-	run(argc, argv);
-//	test();
+//	run(argc, argv);
+	test();
 }
 
