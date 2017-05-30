@@ -9,33 +9,30 @@
 
 double FSMrec::object() {
 	double obj = tR->frobenius() / 2;
-	obj += lambda / 2 * w->norm2();
+	obj += lambda * w->norm1();
+	obj += alpha * S->norm1();
 	return obj;
-}
-
-void FSMrec::laplace(Dense* L) {
-	Dense*Q = new Dense;
-	Dense* temp = new Dense;
-	R->times(Q, tR, true, false);
-	Q->plus(1.0f, alpha);
-	Q->clone(L);
-	//tildeS->plus(Sp, 1.0f);
-	L->eTimes(S);
-	L->rowSum(temp);
-	temp->diag(L);
-	L->plus(Q, -1.0f, 1.0f, false);
-	delete temp;
-	delete Q;
 }
 
 void FSMrec::partial() {
 	Dense*L = new Dense;
 	Dense*r = new Dense;
-	laplace(L);
+	Dense*Q = new Dense;
+	Dense* temp = new Dense;
+	R->times(Q, tR, true, false);
+	Q->plus(1.0f, alpha);
+	Q->clone(L);
+	L->eTimes(S);
+	L->rowSum(temp);
+	temp->diag(L);
+	L->plus(Q, -1.0f, 1.0f, false);
 	nF->selfTimes(dw, L);
-	dw->plus(w, 1.0f, lambda, false);
+	dw->plus(1.0, lambda);
+//	dw->plus(w, 1.0f, lambda, false);
 	delete L;
 	delete r;
+	delete temp;
+	delete Q;
 }
 
 void FSMrec::tildeCalc() {
@@ -43,13 +40,13 @@ void FSMrec::tildeCalc() {
 	R->plus(tR, -1.0f, 1.0f, false);
 }
 
-void FSMrec::prosimCalc(Dense* w) {
+void FSMrec::prosimCalc() {
 	Dense* t = new Dense;
+	Sparse*temp = new Sparse;
 	w->clone(t);
 	t->square_root();
 	F->diagTimes(nF, t, false);
 	nF->rowNorm(t);
-	Sparse*temp = new Sparse;
 	nF->innerTimes(temp);
 	temp->toDense(S);
 	S->setDiagValue(0.0f);
@@ -60,11 +57,11 @@ void FSMrec::prosimCalc(Dense* w) {
 
 void FSMrec::learn() {
 	int iter;
-	float a;
-	float b = 0.1f;
-	float obj0, obj1;
-	float n2;
-	float tol = 0.00001;
+	double a;
+	double b = 0.1;
+	double obj0, obj1;
+	double n2;
+	double tol = 0.00001;
 	int i;
 	Dense* w0 = new Dense;
 	Dense* w1 = new Dense;
@@ -72,48 +69,48 @@ void FSMrec::learn() {
 	w->setRandom();
 	w->clone(w0);
 	for (iter = 1; iter <= maxiter; ++iter) {
-		prosimCalc(w);
+		prosimCalc();
 		tildeCalc();
 		obj0 = object();
 		printf("---------- iter:%d ------------\n", iter);
 		printf("obj=%f\n", obj0);
 		//tildeR->plus(Rb, train, &ONE, &NEG_ONE);
 		partial();
-		a = 100.0f / dw->norm2();
+		a = dw->norm2();
 		if (a > 1)
 			a = 1;
 		a = -a;
-		w0->plus(dw, 1.0f, -1.0f, false);
-		//w0->plus(dw, -1.0f);
-		w0->project();
-		prosimCalc(w0);
+		w0->plus(w, dw, 1.0, a, false, false);
+		w->project();
+		prosimCalc();
 		tildeCalc();
 		obj1 = object();
-		w0->plus(w1, w, 1.0f, -1.0f, false, false);
+//		printf("obj1=%f\n", obj1);
+		w->plus(w1, w0, 1.0f, -1.0f, false, false);
 		//w0->plus(w2, w, 1.0f, -1.0f);
-		n2 = w1->dot(dw);
+		n2 = w->dot(dw);
 		if (obj1 - obj0 > 0.01 * n2) {
 			for (i = 0; i < 20; ++i) {
 				a *= b;
-				w->plus(w0, dw, 1.0f, a, false, false);
-//				w->plus(w0, dw, 1.0f, a);
-				w0->project();
-				prosimCalc(w0);
+				w0->plus(w, dw, 1.0, a, false, false);
+				w->project();
+				prosimCalc();
 				tildeCalc();
 				obj1 = object();
-				w0->plus(w1, w, 1.0f, -1.0f, false, false);
+//				printf("obj1=%f\n", obj1);
+				w->plus(w1, w0, 1.0f, -1.0f, false, false);
 				n2 = w1->dot(dw);
 				if (obj1 - obj0 <= 0.01 * n2)
 					break;
 			}
 		}
-		w0->plus(w1, w, 1.0f, -1.0f, false, false);
+		w->plus(w1, w0, 1.0f, -1.0f, false, false);
 		n2 = w1->norm2();
 		printf("norm dw=%f\n", n2);
 		if (n2 < tol)
 			break;
 		//if (obj1>=obj0) break;
-		w0->copyto(w);
+		w->copyto(w0);
 		//printf("norm w=%f\n", w->norm2());
 	}
 	R->times(pR, S, false, false);
@@ -147,13 +144,15 @@ void FSMrec::record(const char*filename) {
 }
 
 void FSMrec::model(const char*filename) {
-	FILE*file = fopen(filename, "a");
+	FILE*file = fopen(filename, "w");
 	int len = w->length();
-	for (int i = 0; i < len; i++) {
-		double v = w->val[i];
+	double v;
+	for (int i = 0; i < len - 1; i++) {
+		v = w->val[i];
 		fprintf(file, "%f ", v);
 	}
-	fprintf(file, "\n");
+	v = w->val[len - 1];
+	fprintf(file, "%f\n", v);
 	fclose(file);
 }
 //nF = new Sparse();

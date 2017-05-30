@@ -12,18 +12,15 @@
 
 class PCF: public Model {
 public:
-	Dense*Q;
-	Dense*W;
 	float alpha, beta;
 	int k;
 
 public:
 	PCF(float _alpha, float _beta, int _k, int maxiter, int folder) :
 			alpha(_alpha), beta(_beta), k(_k), Model(maxiter, folder) {
-		Q = new Dense;
-		W = new Dense;
 	}
 	void learn();
+	void project(Dense*A, Dense*P,bool left);
 	void record(const char*);
 	~PCF();
 };

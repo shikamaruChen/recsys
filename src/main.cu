@@ -27,7 +27,7 @@ float alpha1 = 0.000001f;
 float alpha2 = 0.000001f;
 float mu1 = 0.1f;
 float mu2 = 0.1f;
-int k = 100;
+int k = 5;
 int l = 1;
 int maxiter = 20;
 int fold = 1;
@@ -281,15 +281,26 @@ void run(int argc, char* argv[]) {
 
 void test() {
 	initial();
-
-	float f = 3.330669073875470e-16;
-	printf("%f\n",f);
+	Dense*d = new Dense;
+	d->input("dataset/d1");
+	d->transpose();
+	Dense*r = new Dense;
+	d->pinv(r,0.0001);
+	r->print();
+//	Dense*r = new Dense;
+//	U->timesDiag(r, S, 1.0, false);
+//	r->rtimes(U, 1.0, false, true);
+//	r->print();
+//	d->initial(4, 4);
+//	d->setIdentity();
+//	d->setElem(0,0,0);
+//	d->print();
 	clean();
 
 }
 //-H -d /home/yifan/dataset/nips -a 0.5 -k 100 -M 100
 int main(int argc, char* argv[]) {
-//	run(argc, argv);
-	test();
+	run(argc, argv);
+//	test();
 }
 

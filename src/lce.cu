@@ -7,7 +7,7 @@
 
 #include "lce.h"
 
-__global__ void selectKernel(float*S, int*index, int m, int n, int k);
+__global__ void selectKernel(double*S, int*index, int m, int n, int k);
 
 void LCE::laplace(int num) {
 	Sparse*s = new Sparse;

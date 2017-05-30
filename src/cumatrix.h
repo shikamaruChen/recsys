@@ -40,7 +40,7 @@
 class Dense {
 public:
 	double*cu_val = 0;
-	thrust::device_ptr<float> val;
+	thrust::device_ptr<double> val;
 	int m, n;
 public:
 public:
@@ -53,7 +53,11 @@ public:
 	void colSum(Dense*);
 	void copyto(Dense*);
 	void diag(Dense*);
-	float dot(Dense*);
+	void rbind(Dense*r, Dense*d, double a, double b);
+	void rbind(Dense*d, double a, double b);
+	void cbind(Dense*r, Dense*d, double a, double b);
+	void cbind(Dense*d, double a, double b);
+	double dot(Dense*);
 	void eDiv(Dense*);
 	void eig();
 	void eig(Dense*D);
@@ -61,33 +65,35 @@ public:
 	void eigs(int k, Dense*Q);
 	void svd(Dense*U, Dense*V, Dense*S);
 	void eTimes(Dense*);
-	void eTimes(Dense*, float a);
-	float frobenius();
+	void eTimes(Dense*, double a);
+	double frobenius();
 	void getCol(Dense*d, int c);
-	float getElem(int i, int j);
+	double getElem(int i, int j);
 	void getRow(Dense*d, int r);
-	void gemv(Dense*x, Dense*y, float alpha, float beta, bool trans);
-	void ger(Dense*x, Dense*y, float);
+	void gemv(Dense*x, Dense*y, double alpha, double beta, bool trans);
+	void ger(Dense*x, Dense*y, double);
 public:
 	int length() {
 		return m * n;
 	}
-	void ltimes(Dense*A, float alpha, bool trans, bool tA);
-	void ltimes(Dense*r, Dense*A, float alpha, bool trans, bool tA);
-	void ltimesDiag(Dense*, Dense*, float alpha, bool trans);
+	void ltimes(Dense*A, double alpha, bool trans, bool tA);
+	void ltimes(Dense*r, Dense*A, double alpha, bool trans, bool tA);
+	void ltimesDiag(Dense*, Dense*, double alpha, bool trans);
 	void initial(int m, int n);
 	void input(const char*);
 	void inv(Dense*);
-	float norm1();
-	float norm2();
+	void pinv(Dense*, double tol);
+	void truncation(int k);
+	double norm1();
+	double norm2();
 	void orth();
-	void plus(float, float);
-	void plus(Dense*, float, float, bool);
-	void plus(Dense*r, Dense*d, float, float, bool, bool);
-	void plusDiag(Dense*r, Dense*d, float, float, bool);
-	void plusDiag(Dense*d, float, float);
-	void plusDiag(float, float);
-	void pow(float ind);
+	void plus(double, double);
+	void plus(Dense*, double, double, bool);
+	void plus(Dense*r, Dense*d, double, double, bool, bool);
+	void plusDiag(Dense*r, Dense*d, double, double, bool);
+	void plusDiag(Dense*d, double, double);
+	void plusDiag(double, double);
+	void pow(double ind);
 	void print();
 	void print(const char*);
 	void project();
@@ -95,37 +101,38 @@ public:
 	void rowNorm(Dense*);
 	void rowSquare(Dense*);
 	void rowSum(Dense*);
-	void rtimes(Dense*A, float alpha, bool trans, bool tA);
-	void rtimes(Dense*r, Dense*A, float alpha, bool trans, bool tA);
-	void scale(float);
+	void rtimes(Dense*A, double alpha, bool trans, bool tA);
+	void rtimes(Dense*r, Dense*A, double alpha, bool trans, bool tA);
+	void scale(double);
 	void setCol(Dense*d, int c);
-	void setDiagValue(float v);
-	void setElem(int i, int j, float v);
+	void setDiagValue(double v);
+	void setElem(int i, int j, double v);
 	void setIdentity();
 	void setIdentity(int);
 	void setRandom();
 	void setRow(Dense*d, int r);
-	void setValue(float v);
-	void shrink(float tau);
-	void signPlus(Dense*, float);
+	void setValue(double v);
+	void shrink(double tau);
+	void signPlus(Dense*, double);
 	void solve(Dense*);
 //	void sortKeyCol()
 	thrust::device_ptr<int> sortKeyCol(bool greater);
 	thrust::device_ptr<int> sortKeyRow(bool greater);
-	float square();
+	double square();
 	void square_root();
 	void sub(Dense*, int rs, int re, int cs, int ce);
-	float sum();
-	void timesDiag(Dense*, Dense*, float alpha, bool left);
+	double sum();
+	void timesDiag(Dense*, Dense*, double alpha, bool left, int n);
+	void timesDiag(Dense*, Dense*, double alpha, bool left);
 	void timesVec(Dense*, Dense*, bool trans);
 	void transpose();
 	void transpose(Dense*);
 	//y=alpha op(A)x+beta y
 	//void gemm(Dense*, Dense*, float alpha, float beta, bool tA, bool tB);
 	//void times(Dense*, Dense*, bool tA, bool tB);
-	void times(Dense*A, Dense*B, float alpha, float beta, bool tA, bool tB);//C=alpha*C+beta*op(A)*op(B)
-	void times(Dense*r, float a);
-	void times(float a);
+	void times(Dense*A, Dense*B, double alpha, double beta, bool tA, bool tB);//C=alpha*C+beta*op(A)*op(B)
+	void times(Dense*r, double a);
+	void times(double a);
 	//B=alpha*op(B)*op(A)
 	//r=alpha*op(B)*op(A)
 	//B=alpha*op(A)*op(B)
@@ -137,7 +144,7 @@ public:
 	//d=alpha*d+beta*ones
 	//this=alpha*this+beta*op(d)
 	//	void plusDiag(Dense*)
-	float trace(Dense*d);
+	double trace(Dense*d);
 	~Dense();
 };
 
@@ -148,13 +155,13 @@ public:
 //	float*val = 0;
 	thrust::device_ptr<int> row;
 	thrust::device_ptr<int> col;
-	thrust::device_ptr<float> val;
+	thrust::device_ptr<double> val;
 	int*cu_row = 0;
 	int*cu_row_index = 0;
 	int*cu_col = 0;
 	int*cu_col_index = 0;
-	float*cu_val = 0;
-	float*trans_val = 0;
+	double*cu_val = 0;
+	double*trans_val = 0;
 	int m = 0;
 	int n = 0;
 	int nnz = 0;
@@ -168,12 +175,12 @@ public:
 	void clone(Sparse*);
 	void colSum(Dense*);
 	void colVec(Dense*d, int c);
-	void csrmm2(Dense*C, Dense*B, bool, bool, float a, float b);
-	void csrmv(Dense*y, Dense*x, float alpha, float beta, bool trans);
+	void csrmm2(Dense*C, Dense*B, bool, bool, double a, double b);
+	void csrmv(Dense*y, Dense*x, double alpha, double beta, bool trans);
 	void diagTimes(Sparse*, Dense*, bool trans);
 	void eTimes(Dense*);
 	void eTimes(Dense*, Sparse*);
-	float getElem(int i, int j);
+	double getElem(int i, int j);
 	void initialBoth();
 	void initialCSC();
 	void initialCSR();
@@ -182,13 +189,14 @@ public:
 	void outerTimes(Sparse*);	//St*S
 	void outerTimes(Dense*B, Dense*A);	//B=St*A*S
 	void inv(Dense*);
-	void plus(Dense*r, float, float, bool);
-	void plus(Sparse*, Sparse*, float, float);
+	void pinv(Dense*, double tol);
+	void plus(Dense*r, double, double, bool);
+	void plus(Sparse*, Sparse*, double, double);
 	void print();
 	void printFull();
 	void readCSC(const char*);
 	void readCSR(const char*);
-	void rowMultiply(float);
+	void rowMultiply(double);
 	void rowNorm();
 	void rowNorm(Dense*);
 	void rowSum(Dense*);
@@ -196,12 +204,12 @@ public:
 	void selfTimes(Dense*, Dense*);
 	void setIdentity(int m);
 	void setDiag(Dense*d);
-	void times(Dense*, Dense*, bool transA, bool transB);
+	void times(Dense*r, Dense*d, bool transA, bool transB);
 	void times(Sparse*, Sparse*, bool transA, bool transB);
 	void toDense(Dense*);
 	void transpose();
-	void uploadCSC(int*, int*, float*);
-	void uploadCSR(int*, int*, float*);
+	void uploadCSC(int*, int*, double*);
+	void uploadCSR(int*, int*, double*);
 	void writeCSC(const char*);
 	void writeCSR(const char*);
 	~Sparse();

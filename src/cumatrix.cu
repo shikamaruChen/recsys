@@ -1,37 +1,40 @@
 #include "cumatrix.h"
+#include <limits>
 
-float ONE = 1.0f;
-float NEG_ONE = -1.0f;
-float HALF = 0.5f;
-float NEG_HALF = -0.5f;
-float ZERO = 0.0f;
+double ONE = 1.0f;
+double NEG_ONE = -1.0f;
+double HALF = 0.5f;
+double NEG_HALF = -0.5f;
+double ZERO = 0.0f;
 #define CURAND_CALL(x) do { if((x)!=CURAND_STATUS_SUCCESS) { \
 printf("Error at %s:%d\n",__FILE__,__LINE__);\
 exit(EXIT_FAILURE);}} while(0) 
 
-__global__ void subKernel(float *origin, float*sub, int rs, int re, int cs,
+__global__ void subKernel(double *origin, double*sub, int rs, int re, int cs,
 		int ce, int m);
-__global__ void eTimesSPKernel(int*row, int*col, float*val, float*d, int m,
+__global__ void eTimesSPKernel(int*row, int*col, double*val, double*d, int m,
 		int n);
-__global__ void etimesKernel(int*row1, int*col1, float*v1, int*row2, int*col2,
-		float*v2, float*d, int m, int n);
-__global__ void rowNormSPKernel(int*row, float*val, float*r, int m);
-__global__ void rowMulKernel(int*row, float*val, float alpha, int m);
-__global__ void rowSumKernel(int*row, float*val, int m, float*res);
-//__global__ void eTimesKernel(float*va, const float*vb, int n);
-//__global__ void eDivKernel(float*va, const float*vb, int n);
-__global__ void signPlusKernel(float*d, float*s, float v, int n);
-__global__ void timesDiagKernel(float*r, float*A, float*d, int m, int n,
-		float alpha, bool trans);
-//__global__ void sqrtKernel(float* v, int n);
-__global__ void projectKernel(float* v, int n);
-__global__ void shrinkKernel(float tau, float* d, int m, int n);
-__global__ void repmatKernel(float*r, float*d, int mm, int mn, int m, int n);
-__global__ void subvecKernel(int*row, int*col, int r, float*v, float*d);
-__global__ void getRowKernel(float*v, float*d, int r, int m, int n);
-__global__ void setRowKernel(float*v, float*d, int r, int m, int n);
-__global__ void plusDiagKernel(float*A, float*d, float a, float b, int m,
+__global__ void etimesKernel(int*row1, int*col1, double*v1, int*row2, int*col2,
+		double*v2, double*d, int m, int n);
+__global__ void rowNormSPKernel(int*row, double*val, double*r, int m);
+__global__ void rowMulKernel(int*row, double*val, double alpha, int m);
+__global__ void rowSumKernel(int*row, double*val, int m, double*res);
+//__global__ void eTimesKernel(double*va, const double*vb, int n);
+//__global__ void eDivKernel(double*va, const double*vb, int n);
+__global__ void signPlusKernel(double*d, double*s, double v, int n);
+__global__ void timesDiagKernel(double*r, double*A, double*d, int m, int n,
+		int k, double alpha, bool trans);
+//__global__ void sqrtKernel(double* v, int n);
+__global__ void projectKernel(double* v, int n);
+__global__ void shrinkKernel(double tau, double* d, int m, int n);
+__global__ void repmatKernel(double*r, double*d, int mm, int mn, int m, int n);
+__global__ void subvecKernel(int*row, int*col, int r, double*v, double*d);
+__global__ void getRowKernel(double*v, double*d, int r, int m, int n);
+__global__ void setRowKernel(double*v, double*d, int r, int m, int n);
+__global__ void plusDiagKernel(double*A, double*d, double a, double b, int m,
 		int n);
+__global__ void rbindKernel(double*r, double*d1, double*d2, int m1, int m2,
+		int n, double a, double b);
 
 void Dense::clean() {
 	if (cu_val)
@@ -43,47 +46,47 @@ void Dense::clone(Dense*d) {
 	d->clean();
 	d->initial(m, n);
 	int len = length();
-	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
+	checkCudaErrors(cublasDcopy(handle, len, cu_val, 1, d->cu_val, 1));
 	//cudaMemcpy(d->cu_val, cu_val, sizeof(float)*m*n, cudaMemcpyDeviceToDevice);
 }
 
 void Dense::copyto(Dense* d) {
 	int len = length();
-	checkCudaErrors(cublasScopy(handle, len, cu_val, 1, d->cu_val, 1));
+	checkCudaErrors(cublasDcopy(handle, len, cu_val, 1, d->cu_val, 1));
 }
 
-float Dense::dot(Dense* d) {
+double Dense::dot(Dense* d) {
 	int n = length();
-	float res;
-	checkCudaErrors(cublasSdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
+	double res;
+	checkCudaErrors(cublasDdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
 	return res;
 }
 
-void Dense::ger(Dense*x, Dense*y, float a) {
+void Dense::ger(Dense*x, Dense*y, double a) {
 	checkCudaErrors(
-			cublasSger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
+			cublasDger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
 }
 
 void Dense::initial(int m, int n) {
 	this->m = m;
 	this->n = n;
 	//printf("m=%d,n=%d\n", m, n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
 	val = thrust::device_pointer_cast(cu_val);
 }
 
 void Dense::input(const char* filename) {
 	FILE* file = fopen(filename, "r");
 	fscanf(file, "%d %d", &m, &n);
-	size_t size = sizeof(float) * m * n;
-	float*elem = (float*) malloc(size);
+	size_t size = sizeof(double) * m * n;
+	double*elem = (double*) malloc(size);
 	//int len = m*n;
 	int i, j;
 	for (i = 0; i < m; ++i)
 		for (j = 0; j < n; ++j)
-			fscanf(file, "%f", &elem[i + j * m]);
+			fscanf(file, "%lf", &elem[i + j * m]);
 	//PRINT_MATRIX(val,m,n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * m * n));
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
 	checkCudaErrors(cudaMemcpy(cu_val, elem, size, cudaMemcpyHostToDevice));
 	val = thrust::device_pointer_cast(cu_val);
 	fclose(file);
@@ -94,15 +97,15 @@ void Dense::setRandom() {
 	curandGenerator_t gen;
 	CURAND_CALL(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
 	CURAND_CALL(curandSetPseudoRandomGeneratorSeed(gen, 123ULL));
-	CURAND_CALL(curandGenerateUniform(gen, cu_val, length()));
+	CURAND_CALL(curandGenerateUniformDouble(gen, cu_val, length()));
 	CURAND_CALL(curandDestroyGenerator(gen));
 }
 
-void Dense::setValue(float v) {
+void Dense::setValue(double v) {
 	thrust::fill(val, val + m * n, v);
 }
 
-void Dense::setDiagValue(float v) {
+void Dense::setDiagValue(double v) {
 	int size = fminf(m, n);
 	for (int i = 0; i < size; ++i)
 		val[i + i * m] = v;
@@ -120,11 +123,11 @@ void Dense::setIdentity() {
 	setDiagValue(1.0f);
 }
 
-void Dense::setElem(int i, int j, float v) {
+void Dense::setElem(int i, int j, double v) {
 	val[i + j * m] = v;
 }
 
-float Dense::getElem(int i, int j) {
+double Dense::getElem(int i, int j) {
 	return val[i + j * m];
 }
 
@@ -135,7 +138,7 @@ void Dense::transpose(Dense* trans) {
 	trans->initial(m, n);
 	//checkCudaErrors(cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST));
 	checkCudaErrors(
-			cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &ONE, cu_val,
+			cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &ONE, cu_val,
 					this->m, &ZERO, cu_val, this->m, trans->cu_val, trans->m));
 }
 
@@ -164,7 +167,7 @@ void Dense::rowSum(Dense* vec) {
 	vec->clean();
 	vec->initial(m, 1);
 	checkCudaErrors(
-			cublasSgemv(handle, CUBLAS_OP_N, m, n, &ONE, cu_val, m, one->cu_val, 1, &ZERO, vec->cu_val, 1));
+			cublasDgemv(handle, CUBLAS_OP_N, m, n, &ONE, cu_val, m, one->cu_val, 1, &ZERO, vec->cu_val, 1));
 	delete one;
 }
 
@@ -198,15 +201,15 @@ void Dense::eig(Dense*Q, Dense*D) {
 	clone(Q);
 	int lwork;
 	checkCudaErrors(
-			cusolverDnSsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+			cusolverDnDsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 					CUBLAS_FILL_MODE_UPPER, m, Q->cu_val, m, D->cu_val,
 					&lwork));
 //	printf("lwork=%d\n", lwork);
-	float*work = NULL;
+	double*work = NULL;
 	int* devInfo = NULL;
-	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(float) * lwork));
+	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(double) * lwork));
 	checkCudaErrors(cudaMalloc((void** ) &devInfo, sizeof(int)));
-	cusolverDnSsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+	cusolverDnDsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 			CUBLAS_FILL_MODE_UPPER, m, Q->cu_val, m, D->cu_val, work, lwork,
 			devInfo);
 //	printf("devInfo=%d\n", devInfo);
@@ -221,14 +224,14 @@ void Dense::eig(Dense*D) {
 	D->initial(m, 1);
 	int lwork;
 	checkCudaErrors(
-			cusolverDnSsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+			cusolverDnDsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 					CUBLAS_FILL_MODE_UPPER, m, cu_val, m, D->cu_val, &lwork));
 //	printf("lwork=%d\n", lwork);
-	float*work = NULL;
+	double*work = NULL;
 	int* devInfo = NULL;
-	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(float) * lwork));
+	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(double) * lwork));
 	checkCudaErrors(cudaMalloc((void** ) &devInfo, sizeof(int)));
-	cusolverDnSsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+	cusolverDnDsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 			CUBLAS_FILL_MODE_UPPER, m, cu_val, m, D->cu_val, work, lwork,
 			devInfo);
 //	printf("devInfo=%d\n", devInfo);
@@ -239,17 +242,17 @@ void Dense::eig(Dense*D) {
 }
 
 void Dense::eig() {
-	float*d = NULL;
-	float*work = NULL;
+	double*d = NULL;
+	double*work = NULL;
 	int* devInfo = NULL;
-	checkCudaErrors(cudaMalloc((void** ) &d, sizeof(float) * m));
+	checkCudaErrors(cudaMalloc((void** ) &d, sizeof(double) * m));
 	int lwork;
 	checkCudaErrors(
-			cusolverDnSsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+			cusolverDnDsyevd_bufferSize(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 					CUBLAS_FILL_MODE_UPPER, m, cu_val, m, d, &lwork));
-	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(float) * lwork));
+	checkCudaErrors(cudaMalloc((void** ) &work, sizeof(double) * lwork));
 	checkCudaErrors(cudaMalloc((void** ) &devInfo, sizeof(int)));
-	cusolverDnSsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
+	cusolverDnDsyevd(solver_handle, CUSOLVER_EIG_MODE_VECTOR,
 			CUBLAS_FILL_MODE_UPPER, m, cu_val, m, d, work, lwork, devInfo);
 	if (work)
 		checkCudaErrors(cudaFree(work));
@@ -275,23 +278,23 @@ void Dense::orth() {
 	int lwork_orgqr;
 	int lwork;
 	int*devInfo = NULL;
-	float*work = NULL;
-	float*tau = NULL;
-	checkCudaErrors(cudaMalloc((void** )&tau, sizeof(float) * n));
+	double*work = NULL;
+	double*tau = NULL;
+	checkCudaErrors(cudaMalloc((void** )&tau, sizeof(double) * n));
 	checkCudaErrors(cudaMalloc((void** )&devInfo, sizeof(int)));
 	checkCudaErrors(
-			cusolverDnSgeqrf_bufferSize(solver_handle, m, n, cu_val, m,
+			cusolverDnDgeqrf_bufferSize(solver_handle, m, n, cu_val, m,
 					&lwork_geqrf));
 	checkCudaErrors(
-			cusolverDnSorgqr_bufferSize(solver_handle, m, n, n, cu_val, m, tau,
+			cusolverDnDorgqr_bufferSize(solver_handle, m, n, n, cu_val, m, tau,
 					&lwork_orgqr));
 	lwork = (lwork_geqrf > lwork_orgqr) ? lwork_geqrf : lwork_orgqr;
-	checkCudaErrors(cudaMalloc((void** )&work, sizeof(float) * lwork));
+	checkCudaErrors(cudaMalloc((void** )&work, sizeof(double) * lwork));
 	checkCudaErrors(
-			cusolverDnSgeqrf(solver_handle, m, n, cu_val, m, tau, work, lwork,
+			cusolverDnDgeqrf(solver_handle, m, n, cu_val, m, tau, work, lwork,
 					devInfo));
 	checkCudaErrors(
-			cusolverDnSorgqr(solver_handle, m, n, n, cu_val, m, tau, work,
+			cusolverDnDorgqr(solver_handle, m, n, n, cu_val, m, tau, work,
 					lwork, devInfo));
 	if (devInfo)
 		checkCudaErrors(cudaFree(devInfo));
@@ -312,28 +315,82 @@ void Dense::inv(Dense*B) {
 	solve(B);
 }
 
-void Dense::svd(Dense*U, Dense*V, Dense*S) {
-	if (m < n) {
-		printf("only support m>=n\n");
+struct reciprocal: public thrust::unary_function<double, double> {
+	const double a;
+	reciprocal(double _a) :
+			a(_a) {
+	}
+	__host__ __device__
+	double operator()(const double &x) const {
+		if (x > a)
+			return 1 / x;
+		else
+			return 0;
+	}
+};
+
+void Dense::pinv(Dense*B, double tol) {
+	Dense*U = new Dense;
+	Dense*V = new Dense;
+	Dense*S = new Dense;
+
+	svd(U, V, S);
+	thrust::transform(S->val, S->val + S->length(), S->val, reciprocal(tol));
+	V->timesDiag(B, S, 1.0, false, U->m);
+	B->rtimes(U, 1.0, false, true);
+	delete U;
+	delete V;
+	delete S;
+}
+
+void Dense::truncation(int k) {
+	if (k > m || k > n) {
+		printf("k is larger than m or n\n");
 		return;
 	}
+	Dense*U = new Dense;
+	Dense*V = new Dense;
+	Dense*S = new Dense;
+	svd(U, V, S);
+	thrust::fill(S->val + k, S->val + S->length(), 0);
+	U->timesDiag(this, S, 1.0, false, V->m);
+	rtimes(V, 1.0, false, true);
+	delete U;
+	delete V;
+	delete S;
+//	S->sor
+}
+
+void Dense::svd(Dense*U, Dense*V, Dense*S) {
+	Dense*T = new Dense;
+	if (m < n) {
+		transpose(T);
+		T->svd(V, U, S);
+//		U->transpose();
+		delete T;
+		return;
+	}
+	clone(T);
 	U->clean();
 	U->initial(m, m);
 	V->clean();
 	V->initial(n, n);
 	S->clean();
-	S->initial(n, 1);
+	S->initial(m, 1);
+	S->setValue(0);
 	int lwork = 0;
-	checkCudaErrors(cusolverDnSgesvd_bufferSize(solver_handle, m, n, &lwork));
-	float*work = 0;
-	float*rwork = 0;
+	checkCudaErrors(cusolverDnDgesvd_bufferSize(solver_handle, m, n, &lwork));
+	double*work = 0;
+	double*rwork = 0;
 	int*devInfo = 0;
 	checkCudaErrors(cudaMalloc((void** )&devInfo, sizeof(int)));
-	checkCudaErrors(cudaMalloc((void** )&work, sizeof(float) * lwork));
+	checkCudaErrors(cudaMalloc((void** )&work, sizeof(double) * lwork));
 	checkCudaErrors(
-			cusolverDnSgesvd(solver_handle, 'A', 'A', m, n, cu_val, m,
+			cusolverDnDgesvd(solver_handle, 'A', 'A', m, n, T->cu_val, m,
 					S->cu_val, U->cu_val, m, V->cu_val, n, work, lwork, rwork,
 					devInfo));
+	V->transpose();
+	delete T;
 }
 
 void Dense::print() {
@@ -348,6 +405,7 @@ void Dense::print() {
 
 void Dense::print(const char* filename) {
 	std::ofstream out(filename);
+	out.precision(std::numeric_limits<double>::max_digits10);
 	for (int i = 0; i < m; i++) {
 		for (int j = 0; j < n; j++)
 			out << val[i + j * m] << " ";
@@ -356,13 +414,13 @@ void Dense::print(const char* filename) {
 	out.close();
 }
 
-void Dense::gemv(Dense*x, Dense*y, float alpha, float beta, bool trans) {
+void Dense::gemv(Dense*x, Dense*y, double alpha, double beta, bool trans) {
 	if (trans)
 		checkCudaErrors(
-				cublasSgemv(handle, CUBLAS_OP_T, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
+				cublasDgemv(handle, CUBLAS_OP_T, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
 	else
 		checkCudaErrors(
-				cublasSgemv(handle, CUBLAS_OP_N, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
+				cublasDgemv(handle, CUBLAS_OP_N, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
 }
 
 void Dense::timesVec(Dense*r, Dense*v, bool trans) {
@@ -374,75 +432,93 @@ void Dense::timesVec(Dense*r, Dense*v, bool trans) {
 	gemv(v, r, 1.0f, 0.0f, trans);
 }
 
-void Dense::timesDiag(Dense*r, Dense*d, float alpha, bool left) {
+void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left, int n) {
 	r->clean();
-	r->initial(m, n);
+	if (left)
+		r->initial(this->n, n);
+	else
+		r->initial(this->m, n);
+	r->setValue(0);
 	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	dim3 numBlocks((r->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(r->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
 	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
-			d->cu_val, m, n, alpha, left);
+			d->cu_val, r->m, r->n, left ? this->m : this->n, alpha, left);
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::times(Dense*A, Dense*B, float alpha, float beta, bool tA, bool tB) {
+void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left) {
+	int n = left ? this->m : this->n;
+	timesDiag(r, d, alpha, left, n);
+//	r->clean();
+//	r->initial(m, n);
+//	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+//	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+//			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+//	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
+//			d->cu_val, m, n, alpha, left);
+//	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::times(Dense*A, Dense*B, double alpha, double beta, bool tA,
+		bool tB) {
 	int k;
 	if (tA) {
 		k = A->m;
 		if (tB)
 			checkCudaErrors(
-					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
 		else
 			checkCudaErrors(
-					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
 	} else {
 		k = A->n;
 		if (tB)
 			checkCudaErrors(
-					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
 		else
 			checkCudaErrors(
-					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
 	}
 }
-struct multiply_const: public thrust::unary_function<float, float> {
-	const float a;
-	multiply_const(float _a) :
+struct multiply_const: public thrust::unary_function<double, double> {
+	const double a;
+	multiply_const(double _a) :
 			a(_a) {
 	}
 	__host__ __device__
-	float operator()(const float &x) const {
+	double operator()(const double &x) const {
 		return x * a;
 	}
 };
-void Dense::times(Dense*r, float a) {
+void Dense::times(Dense*r, double a) {
 	r->clean();
 	r->initial(m, n);
 	thrust::transform(val, val + length(), r->val, multiply_const(a));
 }
-void Dense::times(float a) {
+void Dense::times(double a) {
 	thrust::transform(val, val + length(), val, multiply_const(a));
 }
-struct multiply: public thrust::binary_function<float, float, float> {
-	const float a;
-	multiply(float _a) :
+struct multiply: public thrust::binary_function<double, double, double> {
+	const double a;
+	multiply(double _a) :
 			a(_a) {
 	}
 	__host__ __device__
-	float operator()(const float &x, const float &y) const {
+	double operator()(const double &x, const double &y) const {
 		return x * y * a;
 	}
 };
-void Dense::eTimes(Dense* d, float a) {
+void Dense::eTimes(Dense* d, double a) {
 	thrust::transform(val, val + length(), d->val, val, multiply(a));
 }
 
 void Dense::eTimes(Dense*d) {
 	eTimes(d, 1.0f);
 }
-struct divide: public thrust::binary_function<float, float, float> {
+struct divide: public thrust::binary_function<double, double, double> {
 	__host__ __device__
-	float operator()(const float &x, const float &y) const {
+	double operator()(const double &x, const double &y) const {
 		return x / y;
 	}
 };
@@ -455,7 +531,7 @@ void Dense::eDiv(Dense*d) {
 //	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::rtimes(Dense*r, Dense*A, float alpha, bool trans, bool tA) {
+void Dense::rtimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
 	r->clean();
 	int m, n;
 	m = (trans) ? this->n : this->m;
@@ -464,14 +540,14 @@ void Dense::rtimes(Dense*r, Dense*A, float alpha, bool trans, bool tA) {
 	r->times(this, A, 0.0f, alpha, trans, tA);
 }
 
-void Dense::rtimes(Dense*A, float alpha, bool trans, bool tA) {
+void Dense::rtimes(Dense*A, double alpha, bool trans, bool tA) {
 	Dense*B = new Dense;
 	this->clone(B);
 	B->rtimes(this, A, alpha, trans, tA);
 	delete B;
 }
 
-void Dense::ltimes(Dense*r, Dense*A, float alpha, bool trans, bool tA) {
+void Dense::ltimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
 	r->clean();
 	int m, n;
 	m = (tA) ? A->n : A->m;
@@ -480,7 +556,7 @@ void Dense::ltimes(Dense*r, Dense*A, float alpha, bool trans, bool tA) {
 	r->times(A, this, 0.0f, alpha, tA, trans);
 }
 
-void Dense::ltimes(Dense*A, float alpha, bool trans, bool tA) {
+void Dense::ltimes(Dense*A, double alpha, bool trans, bool tA) {
 	Dense*B = new Dense;
 	this->clone(B);
 	B->ltimes(this, A, alpha, trans, tA);
@@ -542,7 +618,7 @@ void Dense::ltimes(Dense*A, float alpha, bool trans, bool tA) {
 //	plus(res, addend, a, b, false, false);
 //}
 
-void Dense::plus(float alpha, float beta) {
+void Dense::plus(double alpha, double beta) {
 	Dense* ones = new Dense;
 	ones->initial(m, n);
 	ones->setValue(1.0f);
@@ -550,18 +626,18 @@ void Dense::plus(float alpha, float beta) {
 	delete ones;
 }
 
-void Dense::plus(Dense* d, float a, float b, bool trans) {
+void Dense::plus(Dense* d, double a, double b, bool trans) {
 	if (trans)
 		checkCudaErrors(
-				cublasSgeam(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, &a, cu_val,
+				cublasDgeam(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, &a, cu_val,
 						m, &b, d->cu_val, d->m, cu_val, m));
 	else
 		checkCudaErrors(
-				cublasSgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, &a, cu_val,
+				cublasDgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, &a, cu_val,
 						m, &b, d->cu_val, d->m, cu_val, m));
 }
 
-void Dense::plus(Dense* res, Dense* d, float a, float b, bool tA, bool tB) {
+void Dense::plus(Dense* res, Dense* d, double a, double b, bool tA, bool tB) {
 	res->clean();
 	int m, n;
 	if (tA) {
@@ -570,12 +646,12 @@ void Dense::plus(Dense* res, Dense* d, float a, float b, bool tA, bool tB) {
 		res->initial(m, n);
 		if (tB)
 			checkCudaErrors(
-					cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &a,
+					cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &a,
 							cu_val, this->m, &b, d->cu_val, d->m, res->cu_val,
 							m));
 		else
 			checkCudaErrors(
-					cublasSgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, &a,
+					cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, &a,
 							cu_val, this->m, &b, d->cu_val, d->m, res->cu_val,
 							m));
 	} else {
@@ -584,18 +660,18 @@ void Dense::plus(Dense* res, Dense* d, float a, float b, bool tA, bool tB) {
 		res->initial(m, n);
 		if (tB)
 			checkCudaErrors(
-					cublasSgeam(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, &a,
+					cublasDgeam(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, &a,
 							cu_val, this->m, &b, d->cu_val, d->m, res->cu_val,
 							m));
 		else
 			checkCudaErrors(
-					cublasSgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, &a,
+					cublasDgeam(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, &a,
 							cu_val, this->m, &b, d->cu_val, d->m, res->cu_val,
 							m));
 	}
 }
 
-void Dense::plusDiag(Dense*r, Dense*d, float a, float b, bool tran) {
+void Dense::plusDiag(Dense*r, Dense*d, double a, double b, bool tran) {
 	if (!tran)
 		clone(r);
 	else
@@ -603,14 +679,14 @@ void Dense::plusDiag(Dense*r, Dense*d, float a, float b, bool tran) {
 	r->plusDiag(d, a, b);
 }
 
-void Dense::plusDiag(Dense*d, float a, float b) {
+void Dense::plusDiag(Dense*d, double a, double b) {
 	int thread = THREADS;
 	int block = (m + thread - 1) / thread;
 	plusDiagKernel<<<block, thread>>>(cu_val, d->cu_val, a, b, m, n);
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::plusDiag(float a, float b) {
+void Dense::plusDiag(double a, double b) {
 	Dense*I = new Dense;
 	I->initial(m, 1);
 	I->setValue(1.0f);
@@ -620,18 +696,18 @@ void Dense::plusDiag(float a, float b) {
 
 void Dense::solve(Dense*x) {
 	int size = 0;
-	float* buffer = 0;
-	float* tau = 0;
+	double* buffer = 0;
+	double* tau = 0;
 	int*info = 0;
 	int h_info = 0;
-	float one = 1.0f;
+	double one = 1.0f;
 	checkCudaErrors(cudaMalloc((void** ) &info, sizeof(int)));
-	checkCudaErrors(cudaMalloc((void** ) &tau, sizeof(float) * m));
+	checkCudaErrors(cudaMalloc((void** ) &tau, sizeof(double) * m));
 	checkCudaErrors(
-			cusolverDnSgeqrf_bufferSize(solver_handle, m, m, cu_val, m, &size));
-	checkCudaErrors(cudaMalloc((void** ) &buffer, sizeof(float) * size));
+			cusolverDnDgeqrf_bufferSize(solver_handle, m, m, cu_val, m, &size));
+	checkCudaErrors(cudaMalloc((void** ) &buffer, sizeof(double) * size));
 	checkCudaErrors(
-			cusolverDnSgeqrf(solver_handle, m, m, cu_val, m, tau, buffer, size,
+			cusolverDnDgeqrf(solver_handle, m, m, cu_val, m, tau, buffer, size,
 					info));
 	checkCudaErrors(
 			cudaMemcpy(&h_info, info, sizeof(int), cudaMemcpyDeviceToHost));
@@ -640,72 +716,72 @@ void Dense::solve(Dense*x) {
 	}
 //	x->initial(b->m, b->n);
 //	checkCudaErrors(
-//			cudaMemcpy(x->cu_val, b->cu_val, sizeof(float) * b->length(),
+//			cudaMemcpy(x->cu_val, b->cu_val, sizeof(double) * b->length(),
 //					cudaMemcpyDeviceToDevice));
 	checkCudaErrors(
-			cusolverDnSormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, x->m,
+			cusolverDnDormqr(solver_handle, CUBLAS_SIDE_LEFT, CUBLAS_OP_T, x->m,
 					x->n, m, cu_val, m, tau, x->cu_val, x->m, buffer, size,
 					info));
 	checkCudaErrors(
-			cublasStrsm(handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, x->m, x->n, &one, cu_val, m, x->cu_val, x->m));
+			cublasDtrsm(handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_UPPER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, x->m, x->n, &one, cu_val, m, x->cu_val, x->m));
 	checkCudaErrors(cudaFree(buffer));
 	checkCudaErrors(cudaFree(tau));
 	checkCudaErrors(cudaFree(info));
 }
 
-void Dense::scale(float a) {
+void Dense::scale(double a) {
 	int len = length();
-	checkCudaErrors(cublasSscal(handle, len, &a, cu_val, 1));
+	checkCudaErrors(cublasDscal(handle, len, &a, cu_val, 1));
 }
 
-float Dense::trace(Dense*d) {
+double Dense::trace(Dense*d) {
 	Dense* r = new Dense;
 	transpose(r);
 	r->eTimes(d);
 	Dense* v = new Dense;
 	r->rowSum(v);
-	float sum = v->sum();
+	double sum = v->sum();
 	delete r;
 	delete v;
 	return sum;
 }
 
-float Dense::sum() {
+double Dense::sum() {
 	Dense* vec = new Dense;
 	rowSum(vec);
 	Dense* ones = new Dense;
 	ones->initial(m, 1);
 	ones->setValue(1.0f);
-	float s = vec->dot(ones);
+	double s = vec->dot(ones);
 	delete vec;
 	delete ones;
 	return s;
 }
 
-float Dense::frobenius() {
+double Dense::frobenius() {
 	eTimes(this);
-	float sum;
+	double sum;
 	int n = length();
-	checkCudaErrors(cublasSasum(handle, n, cu_val, 1, &sum));
+	checkCudaErrors(cublasDasum(handle, n, cu_val, 1, &sum));
 	square_root();
 	return sum;
 }
 
-float Dense::norm2() {
-	float n2;
+double Dense::norm2() {
+	double n2;
 //cublasSdot(handle, m, cu_val, 1, cu_val, 1, &n2);
-	checkCudaErrors(cublasSnrm2(handle, length(), cu_val, 1, &n2));
+	checkCudaErrors(cublasDnrm2(handle, length(), cu_val, 1, &n2));
 	return n2;
 }
 
-float Dense::norm1() {
-	float n1;
-	checkCudaErrors(cublasSasum(handle, length(), cu_val, 1, &n1));
+double Dense::norm1() {
+	double n1;
+	checkCudaErrors(cublasDasum(handle, length(), cu_val, 1, &n1));
 	return n1;
 }
 
-float Dense::square() {
-	float n = norm2();
+double Dense::square() {
+	double n = norm2();
 	return n * n;
 }
 
@@ -713,13 +789,13 @@ void Dense::getCol(Dense*d, int c) {
 	d->clean();
 	d->initial(m, 1);
 	checkCudaErrors(
-			cudaMemcpy(d->cu_val, &cu_val[c * m], sizeof(float) * m,
+			cudaMemcpy(d->cu_val, &cu_val[c * m], sizeof(double) * m,
 					cudaMemcpyDeviceToDevice));
 }
 
 void Dense::setCol(Dense*d, int c) {
 	checkCudaErrors(
-			cudaMemcpy(&cu_val[c * m], d->cu_val, sizeof(float) * m,
+			cudaMemcpy(&cu_val[c * m], d->cu_val, sizeof(double) * m,
 					cudaMemcpyDeviceToDevice));
 }
 
@@ -732,7 +808,7 @@ thrust::device_ptr<int> Dense::sortKeyCol(bool greater) {
 	thrust::fill(d.begin(), d.end(), m);
 	if (greater)
 		thrust::stable_sort_by_key(val, val + len, order,
-				thrust::greater<float>());
+				thrust::greater<double>());
 	else
 		thrust::stable_sort_by_key(val, val + len, order);
 	thrust::transform(order, order + len, d.begin(), seg.begin(),
@@ -782,6 +858,52 @@ void Dense::diag(Dense*d) {
 	}
 }
 
+void Dense::rbind(Dense*r, Dense*d, double a, double b) {
+	if (n != d->n) {
+		printf("column not match\n");
+		return;
+	}
+	r->clean();
+	r->initial(m + d->m, n);
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((r->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(r->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	rbindKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val, d->cu_val, m,
+			d->m, n, a, b);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::rbind(Dense*d, double a, double b) {
+	Dense*r = new Dense;
+	rbind(r, d, a, b);
+	r->clone(this);
+	delete r;
+}
+
+void Dense::cbind(Dense*r, Dense*d, double a, double b) {
+	if (m != d->m) {
+		printf("row not match\n");
+		return;
+	}
+	r->clean();
+	r->initial(m, n + d->n);
+//	checkCudaErrors(cublasDcopy(handle, m*n, cu_val, 1, r->cu_val, 1));
+//	checkCudaErrors(
+//			cublasDcopy(handle, m*d->n, d->cu_val, 1, r->cu_val + m*n, 1));
+	thrust::transform(val, val + length(), r->val, multiply_const(a));
+	thrust::transform(d->val, d->val + d->length(), r->val + m * n,
+			multiply_const(b));
+//	thrust::transform(r->val, r->val + m * n, multiply_const(a));
+//	thrust::transform(r->val + m * n, r->val + m * r->n, multiply_const(b));
+}
+
+void Dense::cbind(Dense*d, double a, double b) {
+	Dense*r = new Dense;
+	cbind(r, d, a, b);
+	r->clone(this);
+	delete r;
+}
+
 Dense::~Dense() {
 //printf("dense destructor called\n");
 	clean();
@@ -794,11 +916,11 @@ void Sparse::readCSR(const char* filename) {
 	fscanf(file, "%d %d %d", &m, &n, &nnz);
 	initialBoth();
 	int i, r, c;
-	float v;
+	double v;
 	size_t size = sizeof(int) * nnz;
 	int*row_host = (int*) malloc(size);
 	int*col_host = (int*) malloc(size);
-	float*val_host = (float*) malloc(sizeof(float) * nnz);
+	double*val_host = (double*) malloc(sizeof(double) * nnz);
 	if (strstr(line, "pattern") != NULL) {
 		for (i = 0; i < nnz; ++i) {
 			fscanf(file, "%d %d", &r, &c);
@@ -808,7 +930,7 @@ void Sparse::readCSR(const char* filename) {
 		}
 	} else {
 		for (i = 0; i < nnz; ++i) {
-			fscanf(file, "%d %d %f", &r, &c, &v);
+			fscanf(file, "%d %d %lf", &r, &c, &v);
 			row_host[i] = r - 1;
 			col_host[i] = c - 1;
 			val_host[i] = v;
@@ -827,7 +949,7 @@ void Sparse::setDiag(Dense*d) {
 	size_t size = sizeof(int) * nnz;
 	int*row_host = (int*) malloc(size);
 	int*col_host = (int*) malloc(size);
-	float*val_host = (float*) malloc(sizeof(float) * nnz);
+	double*val_host = (double*) malloc(sizeof(double) * nnz);
 	for (int i = 0; i < nnz; ++i) {
 		row_host[i] = col_host[i] = i;
 		val_host[i] = d->val[i];
@@ -844,7 +966,7 @@ void Sparse::setIdentity(int s) {
 	size_t size = sizeof(int) * nnz;
 	int*row_host = (int*) malloc(size);
 	int*col_host = (int*) malloc(size);
-	float*val_host = (float*) malloc(sizeof(float) * nnz);
+	double*val_host = (double*) malloc(sizeof(double) * nnz);
 	for (int i = 0; i < nnz; ++i) {
 		row_host[i] = col_host[i] = i;
 		val_host[i] = 1;
@@ -862,11 +984,11 @@ void Sparse::readCSC(const char* filename) {
 	fscanf(file, "%d %d %d", &m, &n, &nnz);
 	initialBoth();
 	int i, r, c;
-	float v;
+	double v;
 	size_t size = sizeof(int) * nnz;
 	int*row_host = (int*) malloc(size);
 	int*col_host = (int*) malloc(size);
-	float*val_host = (float*) malloc(sizeof(float) * nnz);
+	double*val_host = (double*) malloc(sizeof(double) * nnz);
 	if (strstr(line, "pattern") != NULL) {
 		for (i = 0; i < nnz; ++i) {
 			fscanf(file, "%d %d", &r, &c);
@@ -876,7 +998,7 @@ void Sparse::readCSC(const char* filename) {
 		}
 	} else {
 		for (i = 0; i < nnz; ++i) {
-			fscanf(file, "%d %d %f", &r, &c, &v);
+			fscanf(file, "%d %d %lf", &r, &c, &v);
 			row_host[i] = r - 1;
 			col[i] = c - 1;
 			val[i] = v;
@@ -906,7 +1028,7 @@ void Sparse::writeCSC(const char* filename) {
 	std::ofstream out(filename);
 	thrust::device_ptr<int> row(cu_row);
 	thrust::device_ptr<int> col(cu_col_index);
-	thrust::device_ptr<float> val(trans_val);
+	thrust::device_ptr<double> val(trans_val);
 	out << "%%MatrixMarket matrix coordinate real general" << std::endl;
 	out << m << " " << n << " " << nnz << std::endl;
 	for (int i = 0; i < n; ++i) {
@@ -925,14 +1047,14 @@ void Sparse::rowSum(Dense*d) {
 	one->initial(n, 1);
 	one->setValue(1.0f);
 	checkCudaErrors(
-			cusparseScsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, nnz,
+			cusparseDcsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, nnz,
 					&ONE, descr, cu_val, cu_row_index, cu_col, one->cu_val,
 					&ZERO, d->cu_val));
 	delete one;
 }
 
-void Sparse::csrmm2(Dense*r, Dense*d, bool transA, bool transB, float a,
-		float b) {
+void Sparse::csrmm2(Dense*r, Dense*d, bool transA, bool transB, double a,
+		double b) {
 	int m = r->m;
 	int n = r->n;
 	int k = transA ? this->m : this->n;
@@ -941,13 +1063,13 @@ void Sparse::csrmm2(Dense*r, Dense*d, bool transA, bool transB, float a,
 		d->transpose(trans);
 		if (transA) {
 			checkCudaErrors(
-					cusparseScsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+					cusparseDcsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 							CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &a,
 							descr, trans_val, cu_col_index, cu_row,
 							trans->cu_val, n, &b, r->cu_val, m));
 		} else {
 			checkCudaErrors(
-					cusparseScsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+					cusparseDcsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 							CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &a,
 							descr, cu_val, cu_row_index, cu_col, trans->cu_val,
 							n, &b, r->cu_val, m));
@@ -956,13 +1078,13 @@ void Sparse::csrmm2(Dense*r, Dense*d, bool transA, bool transB, float a,
 	} else {
 		if (transA) {
 			checkCudaErrors(
-					cusparseScsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+					cusparseDcsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 							CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &a,
 							descr, trans_val, cu_col_index, cu_row, d->cu_val,
 							n, &b, r->cu_val, m));
 		} else {
 			checkCudaErrors(
-					cusparseScsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+					cusparseDcsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 							CUSPARSE_OPERATION_TRANSPOSE, m, n, k, nnz, &a,
 							descr, cu_val, cu_row_index, cu_col, d->cu_val, n,
 							&b, r->cu_val, m));
@@ -970,15 +1092,15 @@ void Sparse::csrmm2(Dense*r, Dense*d, bool transA, bool transB, float a,
 	}
 }
 
-void Sparse::csrmv(Dense*y, Dense*x, float alpha, float beta, bool trans) {
+void Sparse::csrmv(Dense*y, Dense*x, double alpha, double beta, bool trans) {
 	if (trans) {
 		checkCudaErrors(
-				cusparseScsrmv(handle, CUSPARSE_OPERATION_TRANSPOSE, m, n, nnz,
+				cusparseDcsrmv(handle, CUSPARSE_OPERATION_TRANSPOSE, m, n, nnz,
 						&alpha, descr, cu_val, cu_row_index, cu_col, x->cu_val,
 						&beta, y->cu_val));
 	} else {
 		checkCudaErrors(
-				cusparseScsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n,
+				cusparseDcsrmv(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, n,
 						nnz, &alpha, descr, cu_val, cu_row_index, cu_col,
 						x->cu_val, &beta, y->cu_val));
 	}
@@ -991,16 +1113,16 @@ void Sparse::inv(Dense* d) {
 	int position;
 	checkCudaErrors(cusparseCreateCsrilu02Info(&info_LU));
 	checkCudaErrors(
-			cusparseScsrilu02_bufferSize(handle, m, nnz, descr, cu_val,
+			cusparseDcsrilu02_bufferSize(handle, m, nnz, descr, cu_val,
 					cu_row_index, cu_col, info_LU, &size));
 	checkCudaErrors(cudaMalloc((void** ) &buffer, size));
 	checkCudaErrors(
-			cusparseScsrilu02_analysis(handle, m, nnz, descr, cu_val,
+			cusparseDcsrilu02_analysis(handle, m, nnz, descr, cu_val,
 					cu_row_index, cu_col, info_LU,
 					CUSPARSE_SOLVE_POLICY_NO_LEVEL, &buffer));
 	checkCudaErrors(cusparseXcsrilu02_zeroPivot(handle, info_LU, &position));
 	checkCudaErrors(
-			cusparseScsrilu02(handle, m, nnz, descr, cu_val, cu_row_index,
+			cusparseDcsrilu02(handle, m, nnz, descr, cu_val, cu_row_index,
 					cu_col, info_LU, CUSPARSE_SOLVE_POLICY_NO_LEVEL, buffer));
 	checkCudaErrors(cusparseDestroyCsrilu02Info(info_LU));
 	checkCudaErrors(cudaFree(buffer));
@@ -1012,24 +1134,31 @@ void Sparse::inv(Dense* d) {
 	cusparseSolveAnalysisInfo_t info;
 	checkCudaErrors(cusparseCreateSolveAnalysisInfo(&info));
 	checkCudaErrors(
-			cusparseScsrsm_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m,
+			cusparseDcsrsm_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m,
 					nnz, descr_L, cu_val, cu_row_index, cu_col, info));
 	Dense* I = new Dense;
 	I->setIdentity(m);
 	checkCudaErrors(
-			cusparseScsrsm_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, m,
+			cusparseDcsrsm_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, m,
 					&ONE, descr_L, cu_val, cu_row_index, cu_col, info,
 					I->cu_val, m, t->cu_val, m));
 	checkCudaErrors(
-			cusparseScsrsm_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m,
+			cusparseDcsrsm_analysis(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m,
 					nnz, descr_U, cu_val, cu_row_index, cu_col, info));
 	checkCudaErrors(
-			cusparseScsrsm_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, m,
+			cusparseDcsrsm_solve(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, m, m,
 					&ONE, descr_U, cu_val, cu_row_index, cu_col, info,
 					t->cu_val, m, d->cu_val, m));
 	checkCudaErrors(cusparseDestroySolveAnalysisInfo(info));
 	delete I;
 	delete t;
+}
+
+void Sparse::pinv(Dense*r, double tol) {
+	Dense* d = new Dense;
+	toDense(d);
+	d->pinv(r, tol);
+	delete d;
 }
 
 void Sparse::times(Dense* r, Dense* d, bool transA, bool transB) {
@@ -1040,7 +1169,7 @@ void Sparse::times(Dense* r, Dense* d, bool transA, bool transB) {
 	csrmm2(r, d, transA, transB, 1.0f, 0.0f);
 }
 
-void Sparse::plus(Dense*r, float a, float b, bool trans) {
+void Sparse::plus(Dense*r, double a, double b, bool trans) {
 	Dense*I = new Dense;
 	if (trans)
 		I->setIdentity(m);
@@ -1050,7 +1179,7 @@ void Sparse::plus(Dense*r, float a, float b, bool trans) {
 	delete I;
 }
 
-void Sparse::plus(Sparse*r, Sparse* s, float a, float b) {
+void Sparse::plus(Sparse*r, Sparse* s, double a, double b) {
 	r->m = m;
 	r->n = n;
 	r->nnz = 0;
@@ -1076,7 +1205,7 @@ void Sparse::plus(Sparse*r, Sparse* s, float a, float b) {
 	}
 	r->initialBoth();
 	checkCudaErrors(
-			cusparseScsrgeam(handle, m, n, &a, descr, nnz, cu_val, cu_row_index,
+			cusparseDcsrgeam(handle, m, n, &a, descr, nnz, cu_val, cu_row_index,
 					cu_col, &b, s->descr, s->nnz, s->cu_val, s->cu_row_index,
 					s->cu_col, r->descr, r->cu_val, r->cu_row_index,
 					r->cu_col));
@@ -1151,7 +1280,7 @@ void Sparse::times(Sparse*nmat, Sparse*mat, bool transA, bool transB) {
 	nmat->initialBoth();
 	if (!transA && !transB)
 		checkCudaErrors(
-				cusparseScsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+				cusparseDcsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 						CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, descr, nnz,
 						cu_val, cu_row_index, cu_col, mat->descr, mat->nnz,
 						mat->cu_val, mat->cu_row_index, mat->cu_col,
@@ -1159,7 +1288,7 @@ void Sparse::times(Sparse*nmat, Sparse*mat, bool transA, bool transB) {
 						nmat->cu_col));
 	else if (transA && !transB)
 		checkCudaErrors(
-				cusparseScsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+				cusparseDcsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 						CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, descr, nnz,
 						trans_val, cu_col_index, cu_row, mat->descr, mat->nnz,
 						mat->cu_val, mat->cu_row_index, mat->cu_col,
@@ -1167,7 +1296,7 @@ void Sparse::times(Sparse*nmat, Sparse*mat, bool transA, bool transB) {
 						nmat->cu_col));
 	else if (!transA && transB)
 		checkCudaErrors(
-				cusparseScsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+				cusparseDcsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 						CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, descr, nnz,
 						cu_val, cu_row_index, cu_col, mat->descr, mat->nnz,
 						mat->trans_val, mat->cu_col_index, mat->cu_row,
@@ -1175,7 +1304,7 @@ void Sparse::times(Sparse*nmat, Sparse*mat, bool transA, bool transB) {
 						nmat->cu_col));
 	else
 		checkCudaErrors(
-				cusparseScsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+				cusparseDcsrgemm(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
 						CUSPARSE_OPERATION_NON_TRANSPOSE, m, n, k, descr, nnz,
 						trans_val, cu_col_index, cu_row, mat->descr, mat->nnz,
 						mat->trans_val, mat->cu_col_index, mat->cu_row,
@@ -1218,7 +1347,8 @@ void Sparse::initialCSR() {
 		if (!cu_col)
 			checkCudaErrors(cudaMalloc((void** ) &cu_col, sizeof(int) * nnz));
 		if (!cu_val)
-			checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * nnz));
+			checkCudaErrors(
+					cudaMalloc((void** ) &cu_val, sizeof(double) * nnz));
 	}
 	if (m > 0 && !cu_row_index)
 		checkCudaErrors(
@@ -1234,7 +1364,7 @@ void Sparse::initialCSC() {
 			checkCudaErrors(cudaMalloc((void** ) &cu_col, sizeof(int) * nnz));
 		if (!trans_val)
 			checkCudaErrors(
-					cudaMalloc((void** ) &trans_val, sizeof(float) * nnz));
+					cudaMalloc((void** ) &trans_val, sizeof(double) * nnz));
 	}
 	if (n > 0 && !cu_col_index)
 		checkCudaErrors(
@@ -1249,10 +1379,11 @@ void Sparse::initialBoth() {
 		if (!cu_col)
 			checkCudaErrors(cudaMalloc((void** ) &cu_col, sizeof(int) * nnz));
 		if (!cu_val)
-			checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(float) * nnz));
+			checkCudaErrors(
+					cudaMalloc((void** ) &cu_val, sizeof(double) * nnz));
 		if (!trans_val)
 			checkCudaErrors(
-					cudaMalloc((void** ) &trans_val, sizeof(float) * nnz));
+					cudaMalloc((void** ) &trans_val, sizeof(double) * nnz));
 	}
 	if (m > 0 && !cu_row_index)
 		checkCudaErrors(
@@ -1289,36 +1420,36 @@ void Sparse::innerTimes(Dense*B, Dense*A) {
 	delete T;
 }
 
-void Sparse::uploadCSR(int* row, int* col, float* val) {
+void Sparse::uploadCSR(int* row, int* col, double* val) {
 	checkCudaErrors(
 			cudaMemcpy(cu_row, row, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	checkCudaErrors(
 			cudaMemcpy(cu_col, col, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	checkCudaErrors(
-			cudaMemcpy(cu_val, val, nnz * sizeof(float),
+			cudaMemcpy(cu_val, val, nnz * sizeof(double),
 					cudaMemcpyHostToDevice));
 	checkCudaErrors(
 			cusparseXcoo2csr(handle, cu_row, nnz, m, cu_row_index,
 					CUSPARSE_INDEX_BASE_ZERO));
 	checkCudaErrors(
-			cusparseScsr2csc(handle, m, n, nnz, cu_val, cu_row_index, cu_col,
+			cusparseDcsr2csc(handle, m, n, nnz, cu_val, cu_row_index, cu_col,
 					trans_val, cu_row, cu_col_index, CUSPARSE_ACTION_NUMERIC,
 					CUSPARSE_INDEX_BASE_ZERO));
 }
 
-void Sparse::uploadCSC(int* row, int* col, float* val) {
+void Sparse::uploadCSC(int* row, int* col, double* val) {
 	checkCudaErrors(
 			cudaMemcpy(cu_row, row, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	checkCudaErrors(
 			cudaMemcpy(cu_col, col, nnz * sizeof(int), cudaMemcpyHostToDevice));
 	checkCudaErrors(
-			cudaMemcpy(trans_val, val, nnz * sizeof(float),
+			cudaMemcpy(trans_val, val, nnz * sizeof(double),
 					cudaMemcpyHostToDevice));
 	checkCudaErrors(
 			cusparseXcoo2csr(handle, cu_col, nnz, n, cu_col_index,
 					CUSPARSE_INDEX_BASE_ZERO));
 	checkCudaErrors(
-			cusparseScsr2csc(handle, n, m, nnz, trans_val, cu_col_index, cu_row,
+			cusparseDcsr2csc(handle, n, m, nnz, trans_val, cu_col_index, cu_row,
 					cu_val, cu_col, cu_row_index, CUSPARSE_ACTION_NUMERIC,
 					CUSPARSE_INDEX_BASE_ZERO));
 }
@@ -1352,9 +1483,9 @@ void Sparse::transpose() {
 	if (!cu_col_index) {
 		checkCudaErrors(
 				cudaMalloc((void** ) &cu_col_index, sizeof(int) * (n + 1)));
-		checkCudaErrors(cudaMalloc((void** ) &trans_val, sizeof(float) * nnz));
+		checkCudaErrors(cudaMalloc((void** ) &trans_val, sizeof(double) * nnz));
 		checkCudaErrors(
-				cusparseScsr2csc(handle, m, n, nnz, cu_val, cu_row_index,
+				cusparseDcsr2csc(handle, m, n, nnz, cu_val, cu_row_index,
 						cu_col, trans_val, cu_row, cu_col_index,
 						CUSPARSE_ACTION_NUMERIC, CUSPARSE_INDEX_BASE_ZERO));
 	}
@@ -1370,11 +1501,11 @@ void Sparse::toDense(Dense* dense) {
 	dense->clean();
 	dense->initial(m, n);
 	checkCudaErrors(
-			cusparseScsr2dense(handle, m, n, descr, cu_val, cu_row_index,
+			cusparseDcsr2dense(handle, m, n, descr, cu_val, cu_row_index,
 					cu_col, dense->cu_val, dense->m));
 }
 
-float Sparse::getElem(int i, int j) {
+double Sparse::getElem(int i, int j) {
 	int nnz = row[i + 1] - row[i];
 	int k;
 	for (k = 0; k < nnz && col[row[i] + k] < j; ++k)
@@ -1418,12 +1549,12 @@ void Sparse::rowNorm(Dense*r) {
 	rowNormSPKernel<<<block, thread>>>(cu_row_index, cu_val, r->cu_val, m);
 	checkCudaErrors(cudaDeviceSynchronize());
 	checkCudaErrors(
-			cusparseScsr2csc(handle, m, n, nnz, cu_val, cu_row_index, cu_col,
+			cusparseDcsr2csc(handle, m, n, nnz, cu_val, cu_row_index, cu_col,
 					trans_val, cu_row, cu_col_index, CUSPARSE_ACTION_NUMERIC,
 					CUSPARSE_INDEX_BASE_ZERO));
 }
 
-void Sparse::rowMultiply(float alpha) {
+void Sparse::rowMultiply(double alpha) {
 	int thread = THREADS;
 	int block = (m + thread - 1) / thread;
 	rowMulKernel<<<block, thread>>>(cu_row_index, cu_val, alpha, m);
@@ -1459,7 +1590,7 @@ void Sparse::eTimes(Dense*r, Sparse*s) {
 	r->transpose();
 }
 
-void Dense::signPlus(Dense*s, float v) {
+void Dense::signPlus(Dense*s, double v) {
 	int thread = THREADS;
 	int len = length();
 	int block = (len + thread - 1) / thread;
@@ -1475,17 +1606,17 @@ void Dense::signPlus(Dense*s, float v) {
 void Dense::square_root() {
 	pow(0.5f);
 }
-struct power: public thrust::unary_function<float, float> {
-	const float a;
-	power(float _a) :
+struct power: public thrust::unary_function<double, double> {
+	const double a;
+	power(double _a) :
 			a(_a) {
 	}
 	__host__ __device__
-	float operator()(const float &x) const {
+	double operator()(const double &x) const {
 		return powf(x, a);
 	}
 };
-void Dense::pow(float ind) {
+void Dense::pow(double ind) {
 	thrust::transform(val, val + length(), val, power(ind));
 }
 
@@ -1497,7 +1628,7 @@ void Dense::project() {
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::shrink(float tau) {
+void Dense::shrink(double tau) {
 	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
 	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
 			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);

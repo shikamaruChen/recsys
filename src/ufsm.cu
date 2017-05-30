@@ -10,10 +10,10 @@
 #define THREADS 512
 #define PER_THREADS 16
 
-__global__ void lossfuncKernel(float*v, int*row, int*col, int m, int n,
-		float*d);
-__global__ void predictKernel(int*row1, int*col1, float*v1, int*row2, int*col2,
-		float*v2, int*row3, int*col3, float*d, float*tR, int m, int n);
+__global__ void lossfuncKernel(double*v, int*row, int*col, int m, int n,
+		double*d);
+__global__ void predictKernel(int*row1, int*col1, double*v1, int*row2, int*col2,
+		double*v2, int*row3, int*col3, double*d, double*tR, int m, int n);
 
 void UFSM::record(const char* filename) {
 	FILE*file = fopen(filename, "a");

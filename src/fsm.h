@@ -15,6 +15,7 @@ public:
 	Dense* S = 0;
 	Dense* w = 0;
 	Dense* dw = 0;
+	Dense* L = 0;
 	float lambda = 0;
 	float alpha = 0;
 public:
@@ -27,10 +28,9 @@ public:
 		dw = new Dense();
 	}
 	;
-	void prosimCalc(Dense*);
+	void prosimCalc();
 	void tildeCalc();
 	double object();
-	void laplace(Dense*);
 	void partial();
 	void learn();
 	void record(const char*);
