@@ -64,8 +64,9 @@ public:
 	void eig(Dense*Q, Dense*D);
 	void eigs(int k, Dense*Q);
 	void svd(Dense*U, Dense*V, Dense*S);
-	void eTimes(Dense*);
-	void eTimes(Dense*, double a);
+	void eTimes(Dense*d);
+	void eTimes(Dense*d, double a);
+	void eTimes(Dense*r,Dense*d,double a);
 	double frobenius();
 	void getCol(Dense*d, int c);
 	double getElem(int i, int j);
@@ -174,6 +175,7 @@ public:
 	void clean();
 	void clone(Sparse*);
 	void colSum(Dense*);
+	void colVec(Dense*d, int c,bool row);
 	void colVec(Dense*d, int c);
 	void csrmm2(Dense*C, Dense*B, bool, bool, double a, double b);
 	void csrmv(Dense*y, Dense*x, double alpha, double beta, bool trans);
@@ -185,9 +187,9 @@ public:
 	void initialCSC();
 	void initialCSR();
 	void innerTimes(Sparse*);	//S*St
-	void innerTimes(Dense*B, Dense*A);	//B=S*A*St
+	void innerTimes(Dense*r, Dense*A);	//B=S*A*St
 	void outerTimes(Sparse*);	//St*S
-	void outerTimes(Dense*B, Dense*A);	//B=St*A*S
+	void outerTimes(Dense*r, Dense*A);	//B=St*A*S
 	void inv(Dense*);
 	void pinv(Dense*, double tol);
 	void plus(Dense*r, double, double, bool);
@@ -200,6 +202,7 @@ public:
 	void rowNorm();
 	void rowNorm(Dense*);
 	void rowSum(Dense*);
+	void rowVec(Dense*d, int r,bool column);
 	void rowVec(Dense*d, int r);
 	void selfTimes(Dense*, Dense*);
 	void setIdentity(int m);

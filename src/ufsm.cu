@@ -19,25 +19,25 @@ void UFSM::record(const char* filename) {
 	FILE*file = fopen(filename, "a");
 	if (LOO) {
 		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
+				fold, l, lambda, alpha1, alpha2, alpha, beta, HR[0] / test->nnz,
 				ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
 				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
 				ARHR[3] / test->nnz);
 		fprintf(file,
 				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, mu1, mu2, HR[0] / test->nnz,
+				fold, l, lambda, alpha1, alpha2, alpha, beta, HR[0] / test->nnz,
 				ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
 				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
 				ARHR[3] / test->nnz);
 	} else {
 		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, mu1, mu2, REC[0] / test->nnz,
+				fold, l, lambda, alpha1, alpha2, alpha, beta, REC[0] / test->nnz,
 				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
 				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
 				DCG[3] / test->nnz);
 		fprintf(file,
 				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, mu1, mu2, REC[0] / test->nnz,
+				fold, l, lambda, alpha1, alpha2, alpha, beta, REC[0] / test->nnz,
 				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
 				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
 				DCG[3] / test->nnz);
@@ -72,7 +72,7 @@ void UFSM::predict() {
 	delete MW;
 }
 
-float UFSM::predict(int u, int i) {
+double UFSM::predict(int u, int i) {
 	Dense*f = new Dense;
 	Dense*r = new Dense;
 	Dense*m = new Dense;
@@ -85,7 +85,7 @@ float UFSM::predict(int u, int i) {
 	F->times(v1, r, true, true); //F^T r^T
 	v1->eTimes(f);
 	W->timesVec(v2, m, false);
-	float val = v1->dot(v2);
+	double val = v1->dot(v2);
 	delete f;
 	delete r;
 	delete m;
@@ -151,8 +151,8 @@ void UFSMrmse::update(int u, int i) {
 	r->setElem(i, 0, 0.0f);
 	F->times(frF, r, true, true); //F^T r^T Nf\times 1
 	frF->eTimes(f);
-	float pr = pR->getElem(u, i);
-	float tr = R->getElem(u, i);
+	double pr = pR->getElem(u, i);
+	double tr = R->getElem(u, i);
 
 	frF->rtimes(d1, m, 2 * (pr - tr), false, false); // derivation 1
 	frF->rtimes(d2, W, 2 * (pr - tr), true, false); // derivation 2
@@ -160,9 +160,9 @@ void UFSMrmse::update(int u, int i) {
 
 	WW->diag(dWW);
 	dWW->plus(1.0f, -1.0f);
-	W->timesDiag(d3, dWW, 4 * mu1, false); // derivation 3
+	W->timesDiag(d3, dWW, 4 * alpha, false); // derivation 3
 	WW->setDiagValue(0.0f);
-	W->rtimes(d4, WW, 2 * mu2, false, false); // derivation 4
+	W->rtimes(d4, WW, 2 * beta, false, false); // derivation 4
 
 	m->plus(d2, 1.0f, -alpha2, false); // update M
 	M->setRow(m, u);
@@ -200,10 +200,10 @@ double UFSMrmse::object() {
 	WW->diag(term);
 	term->plus(one, 1.0f, -1.0f, false);
 	nf = term->norm2();
-	obj += mu1 * nf * nf;
+	obj += alpha * nf * nf;
 	WW->setDiagValue(0.0f);
 	nf = WW->norm2();
-	obj += mu2 * nf * nf;
+	obj += beta * nf * nf;
 	delete term;
 	delete one;
 	return obj;
@@ -276,9 +276,9 @@ void UFSMbpr::update(int u, int i, int j) {
 //	d2->print();
 	WW->diag(dWW);
 	dWW->plus(1.0f, -1.0f);
-	W->timesDiag(d3, dWW, 4 * mu1, false); // derivation 3
+	W->timesDiag(d3, dWW, 4 * alpha, false); // derivation 3
 	WW->setDiagValue(0.0f);
-	W->rtimes(d4, WW, 2 * mu2, false, false); // derivation 4
+	W->rtimes(d4, WW, 2 * beta, false, false); // derivation 4
 
 	m->plus(d2, 1.0f, alpha2, false); // update M
 	M->setRow(m, u);
@@ -330,10 +330,10 @@ double UFSMbpr::object() {
 	one->setValue(1.0f);
 	term->plus(one, 1.0f, -1.0f, false);
 	nf = term->norm2();
-	obj += mu1 * nf * nf;
+	obj += alpha * nf * nf;
 	WW->setDiagValue(0.0f);
 	nf = WW->norm2();
-	obj += mu2 * nf * nf;
+	obj += beta * nf * nf;
 
 	delete d;
 	delete term;

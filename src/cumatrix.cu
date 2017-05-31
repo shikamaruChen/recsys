@@ -516,6 +516,13 @@ void Dense::eTimes(Dense* d, double a) {
 void Dense::eTimes(Dense*d) {
 	eTimes(d, 1.0f);
 }
+
+void Dense::eTimes(Dense*r, Dense*d, double a) {
+	r->clean();
+	r->initial(m, n);
+	thrust::transform(val, val + length(), d->val, r->val, multiply(a));
+}
+
 struct divide: public thrust::binary_function<double, double, double> {
 	__host__ __device__
 	double operator()(const double &x, const double &y) const {
@@ -759,12 +766,8 @@ double Dense::sum() {
 }
 
 double Dense::frobenius() {
-	eTimes(this);
-	double sum;
-	int n = length();
-	checkCudaErrors(cublasDasum(handle, n, cu_val, 1, &sum));
-	square_root();
-	return sum;
+	double n = norm2();
+	return n * n;
 }
 
 double Dense::norm2() {
@@ -1520,9 +1523,12 @@ Sparse::~Sparse() {
 	clean();
 }
 
-void Sparse::rowVec(Dense*d, int r) {
+void Sparse::rowVec(Dense*d, int r, bool column) {
 	d->clean();
-	d->initial(1, n);
+	if (column)
+		d->initial(n, 1);
+	else
+		d->initial(1, n);
 	d->setValue(0.0f);
 	int thread = THREADS;
 	int block = (n + thread - 1) / thread;
@@ -1530,15 +1536,26 @@ void Sparse::rowVec(Dense*d, int r) {
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Sparse::colVec(Dense*d, int c) {
+void Sparse::rowVec(Dense*d, int r) {
+	rowVec(d, r, false);
+}
+
+void Sparse::colVec(Dense*d, int c, bool row) {
 	d->clean();
-	d->initial(m, 1);
+	if (row)
+		d->initial(1, m);
+	else
+		d->initial(m, 1);
 	d->setValue(0.0f);
 	int thread = THREADS;
 	int block = (m + thread - 1) / thread;
 	subvecKernel<<<block, thread>>>(cu_col_index, cu_row, c, trans_val,
 			d->cu_val);
 	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Sparse::colVec(Dense*d, int c) {
+	colVec(d, c, false);
 }
 
 void Sparse::rowNorm(Dense*r) {

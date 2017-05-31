@@ -9,6 +9,7 @@
 #include "content.h"
 #include "fsm.h"
 #include "pcf.h"
+#include "ubsm.h"
 
 cusparseHandle_t Sparse::handle;
 cublasHandle_t Dense::handle;
@@ -19,14 +20,12 @@ cusparseMatDescr_t Sparse::descr_U;
 
 #define PATH_SIZE 100
 
-float alpha = 0.1f;
-float beta = 0.1f;
-float lambda = 0.1f;
-float mu = 0.1f;
-float alpha1 = 0.000001f;
-float alpha2 = 0.000001f;
-float mu1 = 0.1f;
-float mu2 = 0.1f;
+double alpha = 0.1;
+double beta = 0.1;
+double lambda = 0.1;
+double mu = 0.1;
+double alpha1 = 0.000001;
+double alpha2 = 0.000001;
 int k = 5;
 int l = 1;
 int maxiter = 20;
@@ -56,24 +55,24 @@ void usage() {
 	printf(" -d, path to working directory\n");
 }
 
-void print() {
-	printf("Algorithm: %s\n", methodname.c_str());
-	printf("parameter setting:\n");
-	printf("maxiter=%d\n", maxiter);
-	printf("alpha=%f\n", alpha);
-	printf("beta=%f\n", beta);
-	printf("lambda=%f\n", lambda);
-	printf("mu=%f\n", mu);
-	printf("alpha1=%f\n", alpha1);
-	printf("alpha2=%f\n", alpha2);
-	printf("mu1=%f\n", mu1);
-	printf("mu2=%f\n", mu2);
-	printf("iteration for %d times\n", maxiter);
-	printf(
-			"-----------------------------dataset-----------------------------\n");
-	printf("dataset directory=%s\n", dir.c_str());
-	printf("evaluated on fold%d\n", fold);
-}
+//void print() {
+//	printf("Algorithm: %s\n", methodname.c_str());
+//	printf("parameter setting:\n");
+//	printf("maxiter=%d\n", maxiter);
+//	printf("alpha=%f\n", alpha);
+//	printf("beta=%f\n", beta);
+//	printf("lambda=%f\n", lambda);
+//	printf("mu=%f\n", mu);
+//	printf("alpha1=%f\n", alpha1);
+//	printf("alpha2=%f\n", alpha2);
+//	printf("mu1=%f\n", mu1);
+//	printf("mu2=%f\n", mu2);
+//	printf("iteration for %d times\n", maxiter);
+//	printf(
+//			"-----------------------------dataset-----------------------------\n");
+//	printf("dataset directory=%s\n", dir.c_str());
+//	printf("evaluated on fold%d\n", fold);
+//}
 
 void initial() {
 	checkCudaErrors(cublasCreate(&Dense::handle));
@@ -176,10 +175,10 @@ void run(int argc, char* argv[]) {
 			method_type = atoi(optarg);
 			break;
 		case '1':
-			mu1 = atof(optarg);
+			alpha1 = atof(optarg);
 			break;
 		case '2':
-			mu2 = atof(optarg);
+			alpha2 = atof(optarg);
 			break;
 		case 'h':
 		default:
@@ -211,12 +210,12 @@ void run(int argc, char* argv[]) {
 		methodname = "sslim2";
 		break;
 	case 5: //ufsmr
-		recsys = new UFSMrmse(alpha1, alpha2, mu1, mu2, lambda, l, maxiter,
+		recsys = new UFSMrmse(alpha1, alpha2, alpha, beta, lambda, l, maxiter,
 				fold);
 		methodname = "ufsmr";
 		break;
 	case 6: //ufsmb
-		recsys = new UFSMbpr(alpha1, alpha2, mu1, mu2, lambda, l, maxiter,
+		recsys = new UFSMbpr(alpha1, alpha2, alpha, beta, lambda, l, maxiter,
 				fold);
 		methodname = "ufsmb";
 		break;
@@ -236,8 +235,12 @@ void run(int argc, char* argv[]) {
 		recsys = new PCF(alpha, beta, k, maxiter, fold);
 		methodname = "pcf";
 		break;
+	case 11:
+//		double b, double l, double a1, double a2, int maxiter, int fold
+		recsys = new UBSM(beta, lambda, alpha1, alpha2, k, maxiter, fold);
+		methodname = "ubsm";
 	}
-	print();
+//	print();
 	std::string::size_type i;
 	std::string::size_type idx = dir.find("/");
 	while ((i = dir.find("/", idx + 1)) != std::string::npos)
@@ -281,24 +284,16 @@ void run(int argc, char* argv[]) {
 
 void test() {
 	initial();
-	Dense*d = new Dense;
-	d->input("dataset/d1");
-	d->transpose();
+	Dense*d1 = new Dense;
+	Dense*d2 = new Dense;
+	d1->input("dataset/d1");
+	d2->input("dataset/d2");
 	Dense*r = new Dense;
-	d->pinv(r,0.0001);
+	d1->eTimes(r, d2, 1.0);
 	r->print();
-//	Dense*r = new Dense;
-//	U->timesDiag(r, S, 1.0, false);
-//	r->rtimes(U, 1.0, false, true);
-//	r->print();
-//	d->initial(4, 4);
-//	d->setIdentity();
-//	d->setElem(0,0,0);
-//	d->print();
 	clean();
 
 }
-//-H -d /home/yifan/dataset/nips -a 0.5 -k 100 -M 100
 int main(int argc, char* argv[]) {
 	run(argc, argv);
 //	test();

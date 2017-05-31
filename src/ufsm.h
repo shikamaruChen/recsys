@@ -17,13 +17,13 @@ public:
 	Dense* WW = 0;
 
 	int l;
-	float alpha1, alpha2;
-	float mu1, mu2;
-	float lambda;
+	double alpha1, alpha2;
+	double alpha, beta;
+	double lambda;
 public:
-	UFSM(float a1, float a2, float m1, float m2, float _lambda, int _l,
+	UFSM(double a1, double a2, double m1, double m2, double _lambda, int _l,
 			int maxiter, int fold) :
-			alpha1(a1), alpha2(a2), mu1(m1), mu2(m2), lambda(_lambda), l(_l), Model(
+			alpha1(a1), alpha2(a2), alpha(m1), beta(m2), lambda(_lambda), l(_l), Model(
 					maxiter, fold) {
 		RF = new Sparse;
 		M = new Dense;
@@ -35,13 +35,13 @@ public:
 	virtual void learn() = 0;
 	void sample(int u, int&i, int&j);
 	void predict();
-	float predict(int u, int i);
+	double predict(int u, int i);
 	virtual ~UFSM(); //virtual
 };
 
 class UFSMrmse: public UFSM {
 public:
-	UFSMrmse(float a1, float a2, float m1, float m2, float lambda, int l,
+	UFSMrmse(double a1, double a2, double m1, double m2, double lambda, int l,
 			int maxiter, int fold) :
 			UFSM(a1, a2, m1, m2, lambda, l, maxiter, fold) {
 	}
@@ -52,7 +52,7 @@ public:
 
 class UFSMbpr: public UFSM {
 public:
-	UFSMbpr(float a1, float a2, float m1, float m2, float lambda, int l,
+	UFSMbpr(double a1, double a2, double m1, double m2, double lambda, int l,
 			int maxiter, int fold) :
 			UFSM(a1, a2, m1, m2, lambda, l, maxiter, fold) {
 	}
