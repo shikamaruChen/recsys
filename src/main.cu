@@ -9,7 +9,8 @@
 #include "content.h"
 #include "fsm.h"
 #include "pcf.h"
-#include "ubsm.h"
+#include "fbsm.h"
+#include "high.h"
 
 cusparseHandle_t Sparse::handle;
 cublasHandle_t Dense::handle;
@@ -24,8 +25,8 @@ double alpha = 0.1;
 double beta = 0.1;
 double lambda = 0.1;
 double mu = 0.1;
-double alpha1 = 0.000001;
-double alpha2 = 0.000001;
+double alpha1 = 0.01;
+double alpha2 = 0.01;
 int k = 5;
 int l = 1;
 int maxiter = 20;
@@ -237,10 +238,24 @@ void run(int argc, char* argv[]) {
 		break;
 	case 11:
 //		double b, double l, double a1, double a2, int maxiter, int fold
-		recsys = new UBSM(beta, lambda, alpha1, alpha2, k, maxiter, fold);
+		recsys = new FBSM(beta, lambda, alpha1, alpha2, k, maxiter, fold);
 		methodname = "ubsm";
+		break;
+	case 12:
+//		High(double a, double b, double l, double m, double a1, double a2, int _k,
+//					int maxiter, int fold)
+		recsys = new High(alpha, beta, lambda, mu, alpha1, alpha2, k, maxiter,
+				fold);
+		methodname = "high";
+		break;
 	}
-//	print();
+
+	printf("Algorithm: %s\n", methodname.c_str());
+	printf("parameter setting:\n");
+	printf("maxiter=%d\n", maxiter);
+	printf("fold=%d\n", fold);
+	recsys->print();
+
 	std::string::size_type i;
 	std::string::size_type idx = dir.find("/");
 	while ((i = dir.find("/", idx + 1)) != std::string::npos)
@@ -284,15 +299,14 @@ void run(int argc, char* argv[]) {
 
 void test() {
 	initial();
-	Dense*d1 = new Dense;
-	Dense*d2 = new Dense;
-	d1->input("dataset/d1");
-	d2->input("dataset/d2");
+	Dense*d = new Dense;
+	d->input("dataset/delta");
 	Dense*r = new Dense;
-	d1->eTimes(r, d2, 1.0);
-	r->print();
+	r->input("dataset/r");
+	Dense*s = new Dense;
+	r->rtimes(s,d,1.0,false,true);
+	s->print();
 	clean();
-
 }
 int main(int argc, char* argv[]) {
 	run(argc, argv);

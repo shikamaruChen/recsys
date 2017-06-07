@@ -17,8 +17,8 @@ void PCF::learn() {
 	Dense*W = new Dense;
 	double tol = 0.0001;
 
-	R->pinv(iR, tol);//compute inv of R
-	//compute A
+	R->pinv(iR, tol); //compute inv of R
+	printf("compute A\n");
 	H->initial(Ni, Ni);
 	H->setIdentity();
 	H->plus(1.0f, -1.0f / Ni);
@@ -27,32 +27,32 @@ void PCF::learn() {
 	T->pinv(A, tol);
 	F->times(T, H, true, false);
 	A->rtimes(T, 1.0f, false, false);
-	//compute B
+	printf("compute B\n");
 	F->times(B, A, false, false);
 	B->plusDiag(1.0, -1.0);
 	B->ltimes(H, 1.0f, false, false);
-	//compute F (replace by T)
+	printf("compute F (replace by T)\n");
 	B->rbind(T, A, 1.0, sqrt(beta));
 	O->initial(Ni, Ni);
 	O->setIdentity();
 	T->rbind(O, 1.0, sqrt(k));
-	T->pinv(iF, tol);//compute inv of F
+	T->pinv(iF, tol); //compute inv of F
 //	iF->print();
-	//compute Pl and Pr
+	printf("compute Pl and Pr\n");
 	project(T, Pl, true);
 	R->toDense(A);
 	A->transpose(B);
 	project(B, Pr, false);
-	//compute S (replace by T)
+	printf("compute S (replace by T)");
 	O->clean();
 	O->initial(Ni + Nf, Nu);
 	O->setValue(0);
 	O->rbind(T, B, 1.0, sqrt(k));
-	//compute M
+	printf("compute M\n");
 	Pl->rtimes(M, T, 1.0, false, false);
 	M->rtimes(Pr, 1.0, false, false);
 	M->truncation(k);
-	//compute W
+	printf("compute W\n");
 	iF->rtimes(W, M, 1.0, false, false);
 	W->rtimes(iR, 1.0, false, true);
 	R->times(pR, W, false, false);
@@ -122,6 +122,12 @@ void PCF::record(const char*filename) {
 				DCG[3] / valid);
 	}
 	fclose(file);
+}
+
+void PCF::print() {
+	printf("k=%d\n",k);
+	printf("alpha=%f\n",alpha);
+	printf("beta=%f\n",beta);
 }
 
 PCF::~PCF() {

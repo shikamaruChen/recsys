@@ -126,6 +126,14 @@ void Feature::record(const char*filename) {
 	fclose(file);
 }
 
+void Feature::print() {
+	printf("k=%d\n", k);
+	printf("alpha=%f\n", alpha);
+	printf("beta=%f\n", beta);
+	printf("lambda=%f\n", lambda);
+	printf("mu=%f\n", mu);
+}
+
 Feature::~Feature() {
 	if (FW)
 		delete FW;

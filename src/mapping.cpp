@@ -23,15 +23,14 @@ Mapping::~Mapping() {
 
 void Mapping::record(const char* filename) {
 	printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, k,
-			alpha, beta, lambda,  HR[0] / test->nnz, ARHR[0] / test->nnz,
+			alpha, beta, lambda, HR[0] / test->nnz, ARHR[0] / test->nnz,
 			HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
 			ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 	FILE*file = fopen(filename, "a");
-	fprintf(file, "%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-			fold, k, alpha, beta, lambda,  HR[0] / test->nnz,
-			ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
-			HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
-			ARHR[3] / test->nnz);
+	fprintf(file, "%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
+			k, alpha, beta, lambda, HR[0] / test->nnz, ARHR[0] / test->nnz,
+			HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
+			ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 	fclose(file);
 }
 
@@ -116,6 +115,13 @@ void Mapping::laplace() {
 	delete row;
 	delete col;
 	delete v;
-
+}
+//int k;
+//float alpha, beta, lambda;
+void Mapping::print() {
+	printf("k=%d\n", k);
+	printf("alpha=%f\n", alpha);
+	printf("beta=%f\n", beta);
+	printf("lambda=%f\n", lambda);
 }
 

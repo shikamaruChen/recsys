@@ -32,6 +32,7 @@ public:
 	}
 
 	void record(const char*);
+	void print();
 	virtual void learn() = 0;
 	void sample(int u, int&i, int&j);
 	void predict();

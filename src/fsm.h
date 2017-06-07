@@ -27,7 +27,7 @@ public:
 		w = new Dense();
 		dw = new Dense();
 	}
-	;
+	void print();
 	void prosimCalc();
 	void tildeCalc();
 	double object();

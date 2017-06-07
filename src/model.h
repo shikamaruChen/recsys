@@ -9,7 +9,7 @@
 #define MODEL_H_
 
 #include "cumatrix.h"
-
+#include "stopwatch.h"
 class Model {
 public:
 	Sparse* R = 0;
@@ -23,10 +23,10 @@ public:
 	int Nu = 0;
 	int Ni = 0;
 	int valid = 0;
-	float HR[4];
-	float ARHR[4];
-	float REC[4];
-	float DCG[4];
+	double HR[4];
+	double ARHR[4];
+	double REC[4];
+	double DCG[4];
 	bool LOO = false;
 public:
 	Model(int m, int f) :
@@ -40,8 +40,10 @@ public:
 		memset(REC, 0, sizeof(REC));
 		memset(DCG, 0, sizeof(DCG));
 	}
-	virtual void record(const char*)=0;
+	virtual void record(const char*) = 0;
 	virtual void learn() = 0;
+	virtual void print() = 0;
+	void result();
 	virtual void model(const char*) {
 	}
 	void readR(const char*);

@@ -23,6 +23,7 @@ public:
 		Q = new Dense;
 	}
 	virtual void learn() = 0;
+	void print();
 	void record(const char*);
 	virtual ~SSLIM(); //virtual
 };

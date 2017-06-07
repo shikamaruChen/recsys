@@ -31,18 +31,27 @@ void UFSM::record(const char* filename) {
 				ARHR[3] / test->nnz);
 	} else {
 		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, alpha, beta, REC[0] / test->nnz,
-				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
-				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
-				DCG[3] / test->nnz);
+				fold, l, lambda, alpha1, alpha2, alpha, beta,
+				REC[0] / test->nnz, REC[1] / test->nnz, REC[2] / test->nnz,
+				REC[3] / test->nnz, DCG[0] / test->nnz, DCG[1] / test->nnz,
+				DCG[2] / test->nnz, DCG[3] / test->nnz);
 		fprintf(file,
 				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, alpha, beta, REC[0] / test->nnz,
-				REC[1] / test->nnz, REC[2] / test->nnz, REC[3] / test->nnz,
-				DCG[0] / test->nnz, DCG[1] / test->nnz, DCG[2] / test->nnz,
-				DCG[3] / test->nnz);
+				fold, l, lambda, alpha1, alpha2, alpha, beta,
+				REC[0] / test->nnz, REC[1] / test->nnz, REC[2] / test->nnz,
+				REC[3] / test->nnz, DCG[0] / test->nnz, DCG[1] / test->nnz,
+				DCG[2] / test->nnz, DCG[3] / test->nnz);
 	}
 	fclose(file);
+}
+
+void UFSM::print() {
+	printf("l=%d\n", l);
+	printf("alpha=%f\n", alpha);
+	printf("beta=%f\n", beta);
+	printf("lambda=%f\n", lambda);
+	printf("alpha1=%f\n", alpha1);
+	printf("alpha2=%f\n", alpha2);
 }
 
 void UFSM::sample(int u, int&i, int&j) {

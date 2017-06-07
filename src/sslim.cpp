@@ -36,6 +36,12 @@ void SSLIM::record(const char* filename) {
 	fclose(file);
 }
 
+void SSLIM::print() {
+	printf("alpha=%f\n", alpha);
+	printf("beta=%f\n", beta);
+	printf("lambda=%f\n", lambda);
+}
+
 SSLIM::~SSLIM() {
 	if (S)
 		delete S;

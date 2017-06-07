@@ -93,6 +93,13 @@ void LCE::predict() {
 	delete d;
 }
 
+void LCE::print() {
+	printf("k=%d\n", k);
+	printf("alpha=%f\n", alpha);
+	printf("beta=%f\n", beta);
+	printf("lambda=%f\n", lambda);
+}
+
 void LCE::record(const char*filename) {
 	printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, k,
 			alpha, beta, lambda, HR[0] / test->nnz, ARHR[0] / test->nnz,

@@ -14,6 +14,8 @@ public:
 	Content(int maxiter, int fold) :
 			Model(maxiter, fold) {
 	}
+	void print() {
+	}
 	void learn();
 	void record(const char*);
 };
@@ -29,10 +31,10 @@ void Content::learn() {
 }
 
 void Content::record(const char*filename) {
-	printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
-			HR[0] / test->nnz, ARHR[0] / test->nnz, HR[1] / test->nnz,
-			ARHR[1] / test->nnz, HR[2] / test->nnz, ARHR[2] / test->nnz,
-			HR[3] / test->nnz, ARHR[3] / test->nnz);
+	printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, HR[0] / test->nnz,
+			ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
+			HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
+			ARHR[3] / test->nnz);
 	FILE*file = fopen(filename, "a");
 	fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
 			HR[0] / test->nnz, ARHR[0] / test->nnz, HR[1] / test->nnz,

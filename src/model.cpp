@@ -6,6 +6,22 @@
  */
 #include "model.h"
 
+void Model::result() {
+	if (LOO) {
+		printf("HR5\tHR10\tHR15\tHR20\tARHR5\tARHR10\tARHR15\tARHR20\n");
+		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", HR[0] / test->nnz,
+				HR[1] / test->nnz, HR[2] / test->nnz, HR[3] / test->nnz,
+				ARHR[0] / test->nnz, ARHR[1] / test->nnz, ARHR[2] / test->nnz,
+				ARHR[3] / test->nnz);
+
+	} else {
+		printf("REC5\tREC10\tREC15\tREC20\tDCG5\tDCG10\tDCG15\tDCG20\n");
+		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", REC[0] / valid,
+				REC[1] / valid, REC[2] / valid, REC[3] / valid, DCG[0] / valid,
+				DCG[1] / valid, DCG[2] / valid, DCG[3] / valid);
+	}
+}
+
 void Model::readR(const char*filename) {
 	R->readCSR(filename);
 	Nu = R->m;

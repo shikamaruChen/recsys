@@ -19,9 +19,9 @@ public:
 	Dense* D = 0;
 	Dense* W = 0;
 	int k;
-	float alpha, beta, lambda;
+	double alpha, beta, lambda;
 public:
-	Mapping(float _alpha, float _beta, float _lambda, int _k, int maxiter,
+	Mapping(double _alpha, double _beta, double _lambda, int _k, int maxiter,
 			int fold) :
 			alpha(_alpha), beta(_beta), lambda(_lambda), k(_k), Model(maxiter,
 					fold) {
@@ -32,7 +32,7 @@ public:
 		D = new Dense;
 		W = new Dense;
 	}
-
+	void print();
 	double object();
 	void learn();
 	void laplace();

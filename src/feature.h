@@ -28,7 +28,7 @@ public:
 		W = new Dense;
 		RF = new Dense;
 	}
-
+	void print();
 	double object();
 	void laplace();
 	void learn();

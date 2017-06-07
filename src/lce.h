@@ -31,6 +31,7 @@ public:
 		W = new Dense;
 		VV = new Dense;
 	}
+	void print();
 	void record(const char*);
 	void learn();
 	void laplace(int);

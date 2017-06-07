@@ -53,8 +53,6 @@ public:
 	void colSum(Dense*);
 	void copyto(Dense*);
 	void diag(Dense*);
-	void rbind(Dense*r, Dense*d, double a, double b);
-	void rbind(Dense*d, double a, double b);
 	void cbind(Dense*r, Dense*d, double a, double b);
 	void cbind(Dense*d, double a, double b);
 	double dot(Dense*);
@@ -66,10 +64,11 @@ public:
 	void svd(Dense*U, Dense*V, Dense*S);
 	void eTimes(Dense*d);
 	void eTimes(Dense*d, double a);
-	void eTimes(Dense*r,Dense*d,double a);
+	void eTimes(Dense*r, Dense*d, double a);
 	double frobenius();
 	void getCol(Dense*d, int c);
 	double getElem(int i, int j);
+	void getRow(Dense*d, int r,bool column);
 	void getRow(Dense*d, int r);
 	void gemv(Dense*x, Dense*y, double alpha, double beta, bool trans);
 	void ger(Dense*x, Dense*y, double);
@@ -98,6 +97,9 @@ public:
 	void print();
 	void print(const char*);
 	void project();
+	void rbind(Dense*r, Dense*d, double a, double b);
+	void rbind(Dense*d, double a, double b);
+	void recip();
 	void repmat(Dense*, int, int);
 	void rowNorm(Dense*);
 	void rowSquare(Dense*);
@@ -174,12 +176,13 @@ public:
 public:
 	void clean();
 	void clone(Sparse*);
+	void colNorm();
+	void colNorm(Dense*,bool normed);
 	void colSum(Dense*);
-	void colVec(Dense*d, int c,bool row);
+	void colVec(Dense*d, int c, bool row);
 	void colVec(Dense*d, int c);
-	void csrmm2(Dense*C, Dense*B, bool, bool, double a, double b);
+	void csrmm2(Dense*C, Dense*B, bool, bool, double a, double b);// C=α∗op(A)∗op(B)+β∗C
 	void csrmv(Dense*y, Dense*x, double alpha, double beta, bool trans);
-	void diagTimes(Sparse*, Dense*, bool trans);
 	void eTimes(Dense*);
 	void eTimes(Dense*, Sparse*);
 	double getElem(int i, int j);
@@ -192,25 +195,30 @@ public:
 	void outerTimes(Dense*r, Dense*A);	//B=St*A*S
 	void inv(Dense*);
 	void pinv(Dense*, double tol);
-	void plus(Dense*r, double, double, bool);
+	void plus(Dense*r, double a, double b, bool);  //r=a*op(this)+b*r
 	void plus(Sparse*, Sparse*, double, double);
+	void pow(double);
 	void print();
 	void printFull();
 	void readCSC(const char*);
 	void readCSR(const char*);
 	void rowMultiply(double);
 	void rowNorm();
-	void rowNorm(Dense*);
+	void rowNorm(Dense*,bool normed);
 	void rowSum(Dense*);
-	void rowVec(Dense*d, int r,bool column);
+	void rowVec(Dense*d, int r, bool column);
 	void rowVec(Dense*d, int r);
 	void selfTimes(Dense*, Dense*);
 	void setIdentity(int m);
 	void setDiag(Dense*d);
 	void times(Dense*r, Dense*d, bool transA, bool transB);
 	void times(Sparse*, Sparse*, bool transA, bool transB);
+	void timesDiag(Sparse*, Dense*, double a, bool trans);
 	void toDense(Dense*);
 	void transpose();
+	void transpose(Sparse*);
+	void updateCSC();
+	void updateCSR();
 	void uploadCSC(int*, int*, double*);
 	void uploadCSR(int*, int*, double*);
 	void writeCSC(const char*);

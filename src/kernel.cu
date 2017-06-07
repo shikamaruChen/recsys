@@ -84,7 +84,8 @@ __global__ void etimesKernel(int*row1, int*col1, double*v1, int*row2, int*col2,
 	}
 }
 
-__global__ void rowNormSPKernel(int*row, double*val, double*r, int m) {
+__global__ void rowNormSPKernel(int*row, double*val, double*r, int m,
+		bool normed) {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i < m) {
 		cublasHandle_t handle;
@@ -92,15 +93,17 @@ __global__ void rowNormSPKernel(int*row, double*val, double*r, int m) {
 		int len = row[i + 1] - row[i];
 		double norm;
 		cublasDnrm2(handle, len, &val[row[i]], 1, &norm);
+		r[i] = norm;
 		if (norm < 1e-10)
 			norm = 0;
 		else
 			norm = 1 / norm;
-		r[i] = norm;
-		cublasDscal(handle, len, &norm, &val[row[i]], 1);
+		if (normed)
+			cublasDscal(handle, len, &norm, &val[row[i]], 1);
 		cublasDestroy(handle);
 	}
 }
+
 __global__ void rowMulKernel(int*row, double*val, double alpha, int m) {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i < m) {
@@ -305,6 +308,19 @@ __global__ void timesDiagKernel(double*r, double*A, double*d, int m, int n,
 	}
 }
 
+__global__ void timesDiagSpKernel(int*row, int*col, double*v, double*d, int m,
+		double alpha) {
+	int x = blockDim.x * blockIdx.x + threadIdx.x;
+	int y = blockDim.y * blockIdx.y + threadIdx.y;
+	if (x < m) {
+		int nnz = row[x + 1] - row[x];
+		if (y < nnz) {
+			int c = col[row[x] + y];
+			v[row[x] + y] *= alpha * d[c];
+		}
+	}
+}
+
 __global__ void getRowKernel(double*v, double*d, int r, int m, int n) {
 	int x = blockDim.x * blockIdx.x + threadIdx.x;
 	if (x < n)
@@ -364,6 +380,14 @@ __global__ void rbindKernel(double*r, double*d1, double*d2, int m1, int m2,
 			r[x + m * y] = b * d2[x - m1 + m2 * y];
 	}
 }
+
+__global__ void setkKernel(int*order, double*v, int m, int n, int k) {
+	int x = blockDim.x * blockIdx.x + threadIdx.x;
+	int y = blockDim.y * blockIdx.y + threadIdx.y;
+	if (x < m && y < k)
+		v[order[x * n + y] * m + x] = 1;
+}
+
 //__global__ void lossfuncKernel(double*R, double*pR, int m, int n, double*d) {
 //	int x = blockDim.x * blockIdx.x + threadIdx.x;
 //	int y = blockDim.y * blockIdx.y + threadIdx.y;

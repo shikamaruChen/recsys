@@ -45,12 +45,13 @@ void FSMrec::prosimCalc() {
 	Sparse*temp = new Sparse;
 	w->clone(t);
 	t->square_root();
-	F->diagTimes(nF, t, false);
-	nF->rowNorm(t);
+	F->timesDiag(nF, t, 1.0, false);
+	nF->rowNorm(t, true);
+	t->recip();
 	nF->innerTimes(temp);
 	temp->toDense(S);
 	S->setDiagValue(0.0f);
-	F->diagTimes(nF, t, true);
+	F->timesDiag(nF, t, 1.0, true);
 	delete t;
 	delete temp;
 }
@@ -141,6 +142,11 @@ void FSMrec::record(const char*filename) {
 				DCG[3] / valid);
 	}
 	fclose(file);
+}
+
+void FSMrec::print() {
+	printf("alpha=%f\n", alpha);
+	printf("lambda=%f\n", lambda);
 }
 
 void FSMrec::model(const char*filename) {
