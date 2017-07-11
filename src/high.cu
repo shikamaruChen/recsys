@@ -153,8 +153,6 @@ void High::computeQ(Dense*dQ) {
 	delta->plus(qd, a, b, false);
 	R->rowVec(r, u, true);
 	r->rtimes(dQ, delta, 1.0, false, true);
-	dQ->print("dataset/Q");
-//	mm->print("dataset/mm");
 	//compute gradient for qi
 	fu->plus(delta, fi, 1.0, -1.0, false, false);
 	delta->plus(fj, 1.0, -1.0, false);
@@ -167,6 +165,8 @@ void High::computeQ(Dense*dQ) {
 	P->rtimes(delta, fu, 1.0, true, false);
 	delta->plus(qu, -a, -b, false);
 	dQ->setRow(delta, j);
+//	dQ->print("dataset/Q");
+//	printf("sigma=%f\n", sigma);
 	dQ->times(L, Q, sigma, -beta, false, false);
 	dQ->plus(Q, 1.0, -lambda, false);
 	delete delta;
@@ -176,8 +176,6 @@ void High::computeQ(Dense*dQ) {
 void High::predict() {
 	Dense*factor = new Dense;
 	Dense*S = new Dense;
-	P->print("dataset/P");
-	Q->print("dataset/Q");
 	F->times(factor, P, false, false);
 	double gamma = 1 - alpha;
 	factor->plus(Q, gamma, alpha, false);
@@ -212,7 +210,7 @@ void High::learn() {
 	Stopwatch watch;
 	for (int iter = 1; iter <= maxiter; ++iter) {
 		printf("---------- iter:%d ------------\n", iter);
-		for (u = 0; u < 1; ++u) {
+		for (u = 0; u < Nu; ++u) {
 			if (R->row[u + 1] - R->row[u] == 0)
 				continue;
 //			printf("step 0\n");
@@ -225,8 +223,9 @@ void High::learn() {
 
 			r = bayesian();
 //			printf("step 3\n");
-			sigma = exp(-r);
-			sigma = sigma / (1 + sigma);
+			sigma = exp(-r) / (1 + exp(-r));
+			if (sigma != sigma)
+				sigma = 1;
 //			printf("step 4\n");
 //			watch.resume();
 			computeP(dP);
