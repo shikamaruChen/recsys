@@ -239,7 +239,7 @@ void run(int argc, char* argv[]) {
 	case 11:
 //		double b, double l, double a1, double a2, int maxiter, int fold
 		recsys = new FBSM(beta, lambda, alpha1, alpha2, k, maxiter, fold);
-		methodname = "ubsm";
+		methodname = "fbsm";
 		break;
 	case 12:
 //		High(double a, double b, double l, double m, double a1, double a2, int _k,
@@ -251,6 +251,7 @@ void run(int argc, char* argv[]) {
 	}
 
 	printf("Algorithm: %s\n", methodname.c_str());
+	printf("dataset: %s\n", dir.c_str());
 	printf("parameter setting:\n");
 	printf("maxiter=%d\n", maxiter);
 	printf("fold=%d\n", fold);
@@ -300,12 +301,11 @@ void run(int argc, char* argv[]) {
 void test() {
 	initial();
 	Dense*d = new Dense;
-	d->input("dataset/delta");
+	d->input("dataset/d1");
 	Dense*r = new Dense;
-	r->input("dataset/r");
-	Dense*s = new Dense;
-	r->rtimes(s,d,1.0,false,true);
-	s->print();
+	int a[] = { 2, 0, 1 };
+	d->keepCol(r, a, 3);
+	r->print();
 	clean();
 }
 int main(int argc, char* argv[]) {

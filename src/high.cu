@@ -117,28 +117,17 @@ void High::computeP(Dense*dP) {
 //	printf("step 3\n");
 	double a = alpha * (1 - alpha);
 	double b = (1 - alpha) * (1 - alpha);
-//	printf("step 4\n");
-//	dP->print();
-//	fd->print();
-//	fP->print();
 	dP->times(fd, fP, a, b, false, false);
-//	printf("step 5\n");
 	fd->rtimes(fP, P, 1.0, true, false);
-//	printf("step 6\n");
 	dP->times(fu, fP, 1.0, b, false, false);
-//	printf("step 7\n");
 	dP->times(fi, qi, 1.0, -2 * a, false, true);
-//	printf("step 8\n");
 	fi->rtimes(fP, P, 1.0, true, false);
-//	printf("step 9\n");
 	dP->times(fi, fP, 1.0, -2 * b, false, false);
-//	printf("step 10\n");
-	P->rtimes(PP, P, 1.0, true, false);
-//	printf("step 11\n");
-	dP->times(P, PP, sigma, -mu, false, false);
-//	printf("step 12\n");
-	dP->plus(P, 1.0, mu - lambda, false);
-//	printf("step 13\n");
+//	P->rtimes(PP, P, 1.0, true, false);
+//	dP->times(P, PP, sigma, -mu, false, false);
+//	dP->plus(P, 1.0, mu - lambda, false);
+	dP->plus(P, sigma, -lambda, false);
+//	P->print("dataset/P");
 	delete fP;
 	delete PP;
 }
@@ -182,7 +171,9 @@ void High::predict() {
 	factor->rtimes(S, factor, 1.0, false, true);
 //	S->print("dataset/S");
 	S->setDiagValue(0.0);
+//	S->print("dataset/S");
 	R->times(pR, S, false, false);
+//	pR->print("pR");
 	delete factor;
 	delete S;
 }
@@ -191,8 +182,8 @@ void High::learn() {
 	R->times(RF, F, false, false);
 	P->initial(Nf, k);
 	Q->initial(Ni, k);
-	P->setRandom();
-	Q->setRandom();
+	P->setValue(0.001);
+	Q->setValue(0.001);
 	laplace();
 	Dense*dP = new Dense;
 	Dense*dQ = new Dense;
@@ -231,14 +222,14 @@ void High::learn() {
 			computeP(dP);
 //			watch.pause();
 //			printf("step 5\n");
-			computeQ(dQ);
+//			computeQ(dQ);
 //			printf("step 6\n");
 			P->plus(dP, 1.0, alpha1, false);
 //			printf("step 7\n");
-			Q->plus(dQ, 1.0, alpha2, false);
+//			Q->plus(dQ, 1.0, alpha2, false);
 		}
 	}
-//	dP->print("dataset/P");
+//	P->print("dataset/P");
 //	dQ->print("dataset/Q");
 //	watch.stop();
 //	printf("time=%f\n",watch.get_time());

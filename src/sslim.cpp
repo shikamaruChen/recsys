@@ -13,21 +13,14 @@
 #define PER_THREADS 16
 
 void SSLIM::record(const char* filename) {
+	result();
 	FILE*file = fopen(filename, "a");
 	if (LOO) {
-		printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, alpha,
-				beta, lambda, HR[0] / test->nnz, ARHR[0] / test->nnz,
-				HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
-				ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 		fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
 				alpha, beta, lambda, HR[0] / test->nnz, ARHR[0] / test->nnz,
 				HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
 				ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 	} else {
-		printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, alpha,
-				beta, lambda, REC[0] / valid, REC[1] / valid, REC[2] / valid,
-				REC[3] / valid, DCG[0] / valid, DCG[1] / valid, DCG[2] / valid,
-				DCG[3] / valid);
 		fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
 				alpha, beta, lambda, REC[0] / valid, REC[1] / valid,
 				REC[2] / valid, REC[3] / valid, DCG[0] / valid, DCG[1] / valid,
@@ -105,7 +98,7 @@ void SSLIM1::learn() {
 }
 
 void SSLIM2::learn() {
-	Sparse* RR = new Sparse;
+	Sparse*RR = new Sparse;
 	Sparse*FF = new Sparse;
 	Dense*dRR = new Dense;
 	Dense*dFF = new Dense;

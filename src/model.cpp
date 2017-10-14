@@ -5,20 +5,18 @@
  *      Author: yifan
  */
 #include "model.h"
+#include <fstream>
 
 void Model::result() {
 	if (LOO) {
 		printf("HR5\tHR10\tHR15\tHR20\tARHR5\tARHR10\tARHR15\tARHR20\n");
-		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", HR[0] / test->nnz,
-				HR[1] / test->nnz, HR[2] / test->nnz, HR[3] / test->nnz,
-				ARHR[0] / test->nnz, ARHR[1] / test->nnz, ARHR[2] / test->nnz,
-				ARHR[3] / test->nnz);
+		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", HR[0], HR[1], HR[2], HR[3],
+				ARHR[0], ARHR[1], ARHR[2], ARHR[3]);
 
 	} else {
 		printf("REC5\tREC10\tREC15\tREC20\tDCG5\tDCG10\tDCG15\tDCG20\n");
-		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", REC[0] / valid,
-				REC[1] / valid, REC[2] / valid, REC[3] / valid, DCG[0] / valid,
-				DCG[1] / valid, DCG[2] / valid, DCG[3] / valid);
+		printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", REC[0], REC[1], REC[2],
+				REC[3], DCG[0], DCG[1], DCG[2], DCG[3]);
 	}
 }
 
@@ -63,9 +61,31 @@ void Model::leaveOneOut() {
 }
 
 void Model::crossValidation() {
-	thrust::device_ptr<int> order = pR->sortKeyRow(true);
+//	R->plus(pR, -10.0, 1.0, false);
+	std::set<int> colset;
+	std::ofstream file("check", std::ios::out);
+	int n;
+	for (n = 0; n < test->nnz; ++n)
+		colset.insert(test->col[n]);
+
+	int*col = new int[colset.size()];
+	n = 0;
+	file << "test items:";
+	for (std::set<int>::iterator iter = colset.begin(); iter != colset.end();
+			++iter) {
+		file << (*iter) << " ";
+		col[n++] = (*iter);
+	}
+	file << std::endl;
+	Dense*tR = new Dense;
+	pR->keepCol(tR, col, n);
+//	tR->print("tR");
+	delete[] col;
+	thrust::device_ptr<int> order = tR->sortKeyRow(true);
+
 	int Ns[] = { 0, 5, 10, 15, 20 };
 	int u = 0;
+
 	for (int user = 0; user < Nu; ++user) {
 		if (R->row[user + 1] - R->row[user] == 0)
 			continue;
@@ -76,8 +96,13 @@ void Model::crossValidation() {
 			continue;
 		valid++;
 		std::set<int> test_user;
-		for (int t = 0; t < nnz; t++)
+		file << "user:" << user << std::endl;
+		file << "testset:";
+		for (int t = 0; t < nnz; t++) {
 			test_user.insert(test->col[start + t]);
+			file << test->col[start + t] << " ";
+		}
+		file << std::endl;
 //		printf("test items:");
 //		for (int item : test_user)
 //			printf("%d ", item);
@@ -90,25 +115,41 @@ void Model::crossValidation() {
 		float recall = 0;
 		float dcg = 0;
 //		printf("recommend items:");
-		for (int n = 0; n < 4; ++n) {
-			for (int s = Ns[n]; s < Ns[n + 1]; s++) {
-//				std::cout<<order[s + user * Ni]<<" ";
+		file << "recommend:";
+		for (int i = 0; i < 4; ++i) {
+			for (int s = Ns[i]; s < Ns[i + 1]; s++) {
+				file << order[s + user * Ni];
 				if (test_user.find(order[s + user * Ni]) != test_user.end()) {
 					recall++;
-					dcg += log(s + 1) / log(2);
+					if (s == 0)
+						dcg += 1;
+					else
+						dcg += log(2) / log(s + 1);
+					file << ":" << s;
 				}
+				file << " ";
 			}
-			REC[n] += recall / nnz;
-			DCG[n] += dcg / Ns[n + 1];
+			REC[i] += recall / Ns[i + 1];
+			DCG[i] += dcg / Ns[i + 1];
 		}
+		file << std::endl;
+		file << std::endl;
 //		printf("\n");
 //			if (rank < Ns[n]) {
 //				HR[n] += 1;
 //				ARHR[n] += 1.0 / (rank + 1);
 //			}
 	}
+	file.close();
 	printf("valid=%d\n", valid);
 	thrust::device_free(order);
+	delete tR;
+	for (int i = 0; i < 4; ++i) {
+		REC[i] /= valid;
+		DCG[i] /= valid;
+		HR[i] /= test->nnz;
+		ARHR[i] /= test->nnz;
+	}
 }
 
 Model::~Model() {

@@ -100,9 +100,11 @@ void FBSM::learn() {
 	int i, j, nnz;
 	R->times(Fu, F, false, false);
 	d->initial(Nf, 1);
-	d->setValue(0.0001);
+	d->setRandom();
+	d->times(0.0001);
 	V->initial(k, Nf);
-	V->setValue(0.0001);
+	V->setRandom();
+	V->times(0.0001);
 //	predict();
 //	pR->print("dataset/pR");
 //	printf("obj=%f\n", object());
@@ -169,33 +171,26 @@ void FBSM::predict() {
 }
 
 void FBSM::record(const char*filename) {
+	result();
 	FILE*file = fopen(filename, "a");
 	if (LOO) {
-		printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, lambda,
-				alpha1, alpha2, HR[0] / test->nnz, ARHR[0] / test->nnz,
-				HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
-				ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
 		fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
-				lambda, alpha1, alpha2, HR[0] / test->nnz, ARHR[0] / test->nnz,
-				HR[1] / test->nnz, ARHR[1] / test->nnz, HR[2] / test->nnz,
-				ARHR[2] / test->nnz, HR[3] / test->nnz, ARHR[3] / test->nnz);
+				lambda, alpha1, alpha2, HR[0], HR[1], HR[2], HR[3], ARHR[0],
+				ARHR[1], ARHR[2], ARHR[3]);
 	} else {
-		printf("%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold, lambda,
-				alpha1, alpha2, REC[0] / test->nnz, REC[1] / test->nnz,
-				REC[2] / test->nnz, REC[3] / test->nnz, DCG[0] / test->nnz,
-				DCG[1] / test->nnz, DCG[2] / test->nnz, DCG[3] / test->nnz);
 		fprintf(file, "%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", fold,
-				lambda, alpha1, alpha2, REC[0] / test->nnz, REC[1] / test->nnz,
-				REC[2] / test->nnz, REC[3] / test->nnz, DCG[0] / test->nnz,
-				DCG[1] / test->nnz, DCG[2] / test->nnz, DCG[3] / test->nnz);
+				lambda, alpha1, alpha2, REC[0], REC[1], REC[2], REC[3], DCG[0],
+				DCG[1], DCG[2], DCG[3]);
 	}
 	fclose(file);
 }
 
 void FBSM::print() {
+	printf("beta=%f\n", beta);
 	printf("lambda=%f\n", lambda);
 	printf("alpha1=%f\n", alpha1);
 	printf("alpha2=%f\n", alpha2);
+	printf("k=%d\n", k);
 }
 
 FBSM::~FBSM() {

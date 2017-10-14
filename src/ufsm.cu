@@ -16,13 +16,9 @@ __global__ void predictKernel(int*row1, int*col1, double*v1, int*row2, int*col2,
 		double*v2, int*row3, int*col3, double*d, double*tR, int m, int n);
 
 void UFSM::record(const char* filename) {
+	result();
 	FILE*file = fopen(filename, "a");
 	if (LOO) {
-		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, alpha, beta, HR[0] / test->nnz,
-				ARHR[0] / test->nnz, HR[1] / test->nnz, ARHR[1] / test->nnz,
-				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
-				ARHR[3] / test->nnz);
 		fprintf(file,
 				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
 				fold, l, lambda, alpha1, alpha2, alpha, beta, HR[0] / test->nnz,
@@ -30,11 +26,6 @@ void UFSM::record(const char* filename) {
 				HR[2] / test->nnz, ARHR[2] / test->nnz, HR[3] / test->nnz,
 				ARHR[3] / test->nnz);
 	} else {
-		printf("%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
-				fold, l, lambda, alpha1, alpha2, alpha, beta,
-				REC[0] / test->nnz, REC[1] / test->nnz, REC[2] / test->nnz,
-				REC[3] / test->nnz, DCG[0] / test->nnz, DCG[1] / test->nnz,
-				DCG[2] / test->nnz, DCG[3] / test->nnz);
 		fprintf(file,
 				"%d\t%d\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",
 				fold, l, lambda, alpha1, alpha2, alpha, beta,
@@ -202,7 +193,7 @@ double UFSMrmse::object() {
 	one->initial(l, 1);
 	pR->clone(term);
 	R->plus(term, 1.0f, -1.0f, false);
-	float nf = term->norm2();
+	double nf = term->norm2();
 	double obj = nf * nf;
 	nf = M->norm2();
 	obj += lambda * nf * nf;
@@ -226,15 +217,24 @@ void UFSMbpr::learn() {
 	M->setRandom();
 	pR->initial(Nu, Ni);
 	predict();
-	int i, j;
-	printf("obj=%f\n", object());
+	int i, j, nnz;
+	double obj0, obj;
+	obj0 = object();
+	printf("obj=%f\n", obj0);
 	for (int iter = 1; iter <= maxiter; ++iter) {
 		printf("---------- iter:%d ------------\n", iter);
 		for (int u = 0; u < Nu; ++u) {
+			nnz = R->row[u + 1] - R->row[u];
+			if (nnz == 0)
+				continue;
 			sample(u, i, j);
 			update(u, i, j);
 		}
-		printf("obj=%f\n", object());
+		obj = object();
+		if (obj > obj0)
+			break;
+		obj0 = obj;
+		printf("obj=%f\n", obj);
 	}
 	predict();
 }
@@ -271,11 +271,11 @@ void UFSMbpr::update(int u, int i, int j) {
 
 	firF->plus(frF, fjrF, 1.0f, -1.0f, false, false);
 
-	float ri = pR->getElem(u, i);
-	float rj = pR->getElem(u, j);
+	double ri = pR->getElem(u, i);
+	double rj = pR->getElem(u, j);
 //	printf("ri=%f,rj=%f\n", ri, rj);
-	float dr = ri - rj;
-	float sigma = exp(-dr);
+	double dr = ri - rj;
+	double sigma = exp(-dr);
 	sigma = sigma / (1 + sigma);
 
 	frF->rtimes(d1, m, sigma, false, false); // derivation 1
@@ -330,7 +330,7 @@ double UFSMbpr::object() {
 	checkCudaErrors(cudaDeviceSynchronize());
 
 	double obj = -d->sum();
-	float nf = M->norm2();
+	double nf = M->norm2();
 	obj += lambda * nf * nf;
 	W->rtimes(WW, W, 1.0f, true, false);
 

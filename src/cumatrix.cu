@@ -10,35 +10,38 @@ double ZERO = 0.0f;
 printf("Error at %s:%d\n",__FILE__,__LINE__);\
 exit(EXIT_FAILURE);}} while(0) 
 
-__global__ void subKernel(double *origin, double*sub, int rs, int re, int cs,
-		int ce, int m);
 __global__ void eTimesSPKernel(int*row, int*col, double*val, double*d, int m,
 		int n);
 __global__ void etimesKernel(int*row1, int*col1, double*v1, int*row2, int*col2,
 		double*v2, double*d, int m, int n);
+__global__ void keepColKernel(double*origin, double*copy, int*col, int m,
+		int n);
+__global__ void getRowKernel(double*v, double*d, int r, int m, int n);
+__global__ void plusDiagKernel(double*A, double*d, double a, double b, int m,
+		int n);
+__global__ void projectKernel(double* v, int n);
+__global__ void rbindKernel(double*r, double*d1, double*d2, int m1, int m2,
+		int n, double a, double b);
+__global__ void repmatKernel(double*r, double*d, int mm, int mn, int m, int n);
+__global__ void rowMulKernel(int*row, double*val, double alpha, int m);
 __global__ void rowNormSPKernel(int*row, double*val, double*r, int m,
 		bool normed);
-__global__ void rowMulKernel(int*row, double*val, double alpha, int m);
 __global__ void rowSumKernel(int*row, double*val, int m, double*res);
+__global__ void setRowKernel(double*v, double*d, int r, int m, int n);
+__global__ void shrinkKernel(double tau, double* d, int m, int n);
+__global__ void signPlusKernel(double*d, double*s, double v, int n);
+__global__ void subColKernel(double* origin, double*sub, int*col, int m, int n);
+
+__global__ void subKernel(double *origin, double*sub, int rs, int re, int cs,
+		int ce, int m);
 //__global__ void eTimesKernel(double*va, const double*vb, int n);
 //__global__ void eDivKernel(double*va, const double*vb, int n);
-__global__ void signPlusKernel(double*d, double*s, double v, int n);
+__global__ void subvecKernel(int*row, int*col, int r, double*v, double*d);
 __global__ void timesDiagKernel(double*r, double*A, double*d, int m, int n,
 		int k, double alpha, bool trans);
 //__global__ void sqrtKernel(double* v, int n);
-__global__ void projectKernel(double* v, int n);
-__global__ void shrinkKernel(double tau, double* d, int m, int n);
-__global__ void repmatKernel(double*r, double*d, int mm, int mn, int m, int n);
-__global__ void subvecKernel(int*row, int*col, int r, double*v, double*d);
-__global__ void getRowKernel(double*v, double*d, int r, int m, int n);
-__global__ void setRowKernel(double*v, double*d, int r, int m, int n);
-__global__ void plusDiagKernel(double*A, double*d, double a, double b, int m,
-		int n);
-__global__ void rbindKernel(double*r, double*d1, double*d2, int m1, int m2,
-		int n, double a, double b);
 __global__ void timesDiagSpKernel(int*row, int*col, double*v, double*d, int m,
 		double alpha);
-
 struct powerOp: public thrust::unary_function<double, double> {
 	const double a;
 	powerOp(double _a) :
@@ -108,99 +111,9 @@ void Dense::copyto(Dense* d) {
 	checkCudaErrors(cublasDcopy(handle, len, cu_val, 1, d->cu_val, 1));
 }
 
-double Dense::dot(Dense* d) {
-	int n = length();
-	double res;
-	checkCudaErrors(cublasDdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
-	return res;
-}
-
-void Dense::ger(Dense*x, Dense*y, double a) {
-	checkCudaErrors(
-			cublasDger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
-}
-
-void Dense::initial(int m, int n) {
-	this->m = m;
-	this->n = n;
-	//printf("m=%d,n=%d\n", m, n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
-	val = thrust::device_pointer_cast(cu_val);
-}
-
-void Dense::input(const char* filename) {
-	FILE* file = fopen(filename, "r");
-	fscanf(file, "%d %d", &m, &n);
-	size_t size = sizeof(double) * m * n;
-	double*elem = (double*) malloc(size);
-	//int len = m*n;
-	int i, j;
-	for (i = 0; i < m; ++i)
-		for (j = 0; j < n; ++j)
-			fscanf(file, "%lf", &elem[i + j * m]);
-	//PRINT_MATRIX(val,m,n);
-	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
-	checkCudaErrors(cudaMemcpy(cu_val, elem, size, cudaMemcpyHostToDevice));
-	val = thrust::device_pointer_cast(cu_val);
-	fclose(file);
-	free(elem);
-}
-
-void Dense::setRandom() {
-	curandGenerator_t gen;
-	CURAND_CALL(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
-	CURAND_CALL(curandSetPseudoRandomGeneratorSeed(gen, 123ULL));
-	CURAND_CALL(curandGenerateUniformDouble(gen, cu_val, length()));
-	CURAND_CALL(curandDestroyGenerator(gen));
-}
-
-void Dense::setValue(double v) {
-	thrust::fill(val, val + m * n, v);
-}
-
-void Dense::setDiagValue(double v) {
-	int size = fminf(m, n);
-	for (int i = 0; i < size; ++i)
-		val[i + i * m] = v;
-}
-
-void Dense::setIdentity(int s) {
-	initial(s, s);
-	setValue(0.0f);
-	for (int i = 0; i < s; ++i)
-		val[i * s + i] = 1;
-}
-
-void Dense::setIdentity() {
-	setValue(0.0f);
-	setDiagValue(1.0f);
-}
-
-void Dense::setElem(int i, int j, double v) {
-	val[i + j * m] = v;
-}
-
-double Dense::getElem(int i, int j) {
-	return val[i + j * m];
-}
-
-void Dense::transpose(Dense* trans) {
-	int m = this->n;
-	int n = this->m;
-	trans->clean();
-	trans->initial(m, n);
-	//checkCudaErrors(cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST));
-	checkCudaErrors(
-			cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &ONE, cu_val,
-					this->m, &ZERO, cu_val, this->m, trans->cu_val, trans->m));
-}
-
-void Dense::transpose() {
-	Dense* trans = new Dense;
-	transpose(trans);
-	clean();
-	trans->clone(this);
-	delete trans;
+void Dense::colNorm(Dense*r) {
+	colSquare(r);
+	r->square_root();
 }
 
 void Dense::colSum(Dense* vec) {
@@ -213,24 +126,6 @@ void Dense::colSum(Dense* vec) {
 	delete v;
 }
 
-void Dense::rowSum(Dense* vec) {
-	Dense* one = new Dense;
-	one->initial(n, 1);
-	one->setValue(1.0f);
-	vec->clean();
-	vec->initial(m, 1);
-	checkCudaErrors(
-			cublasDgemv(handle, CUBLAS_OP_N, m, n, &ONE, cu_val, m, one->cu_val, 1, &ZERO, vec->cu_val, 1));
-	delete one;
-}
-
-void Dense::rowSquare(Dense*r) {
-	Dense*m = new Dense;
-	this->clone(m);
-	m->eTimes(m);
-	m->rowSum(r);
-	delete m;
-}
 void Dense::colSquare(Dense*r) {
 	Dense*m = new Dense;
 	this->clone(m);
@@ -239,15 +134,60 @@ void Dense::colSquare(Dense*r) {
 	delete m;
 }
 
-void Dense::rowNorm(Dense*r) {
-	rowSquare(r);
-	r->square_root();
-}
-void Dense::colNorm(Dense*r) {
-	colSquare(r);
-	r->square_root();
+void Dense::cbind(Dense*r, Dense*d, double a, double b) {
+	if (m != d->m) {
+		printf("row not match\n");
+		return;
+	}
+	r->clean();
+	r->initial(m, n + d->n);
+//	checkCudaErrors(cublasDcopy(handle, m*n, cu_val, 1, r->cu_val, 1));
+//	checkCudaErrors(
+//			cublasDcopy(handle, m*d->n, d->cu_val, 1, r->cu_val + m*n, 1));
+	thrust::transform(val, val + length(), r->val, multiconstOp(a));
+	thrust::transform(d->val, d->val + d->length(), r->val + m * n,
+			multiconstOp(b));
+//	thrust::transform(r->val, r->val + m * n, multiply_const(a));
+//	thrust::transform(r->val + m * n, r->val + m * r->n, multiply_const(b));
 }
 
+void Dense::cbind(Dense*d, double a, double b) {
+	Dense*r = new Dense;
+	cbind(r, d, a, b);
+	r->clone(this);
+	delete r;
+}
+
+void Dense::diag(Dense*d) {
+	d->clean();
+	if (m == 1 || n == 1) {
+		int l = m * n;
+		d->initial(l, l);
+		d->setValue(0.0f);
+		for (int i = 0; i < l; ++i)
+			d->val[i * l + i] = val[i];
+	} else {
+		d->initial(m, 1);
+		for (int i = 0; i < m; ++i)
+			d->val[i] = val[i * m + i];
+	}
+}
+
+double Dense::dot(Dense* d) {
+	int n = length();
+	double res;
+	checkCudaErrors(cublasDdot(handle, n, cu_val, 1, d->cu_val, 1, &res));
+	return res;
+}
+
+void Dense::eDiv(Dense*d) {
+	thrust::transform(val, val + length(), d->val, val, divideOp());
+//	int thread = THREADS;
+//	int len = length();
+//	int block = (len + thread - 1) / thread;
+//	eDivKernel<<<block, thread>>>(cu_val, d->cu_val, len);
+//	checkCudaErrors(cudaDeviceSynchronize());
+}
 void Dense::eig(Dense*Q, Dense*D) {
 	D->clean();
 	D->initial(m, 1);
@@ -293,7 +233,6 @@ void Dense::eig(Dense*D) {
 	if (devInfo)
 		checkCudaErrors(cudaFree(devInfo));
 }
-
 void Dense::eig() {
 	double*d = NULL;
 	double*work = NULL;
@@ -324,6 +263,150 @@ void Dense::eigs(int k, Dense*Q) {
 		Q->ltimes(this, 1.0f, false, false);
 		Q->orth();
 	}
+}
+
+void Dense::eTimes(Dense* d, double a) {
+	thrust::transform(val, val + length(), d->val, val, multiplyOp(a));
+}
+
+void Dense::eTimes(Dense*d) {
+	eTimes(d, 1.0f);
+}
+
+void Dense::eTimes(Dense*r, Dense*d, double a) {
+	r->clean();
+	r->initial(m, n);
+	thrust::transform(val, val + length(), d->val, r->val, multiplyOp(a));
+}
+
+double Dense::frobenius() {
+	double n = norm2();
+	return n * n;
+}
+
+void Dense::getCol(Dense*d, int c) {
+	d->clean();
+	d->initial(m, 1);
+	checkCudaErrors(
+			cudaMemcpy(d->cu_val, &cu_val[c * m], sizeof(double) * m,
+					cudaMemcpyDeviceToDevice));
+}
+
+double Dense::getElem(int i, int j) {
+	return val[i + j * m];
+}
+
+void Dense::gemv(Dense*x, Dense*y, double alpha, double beta, bool trans) {
+	if (trans)
+		checkCudaErrors(
+				cublasDgemv(handle, CUBLAS_OP_T, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
+	else
+		checkCudaErrors(
+				cublasDgemv(handle, CUBLAS_OP_N, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
+}
+
+void Dense::ger(Dense*x, Dense*y, double a) {
+	checkCudaErrors(
+			cublasDger(handle, m, n, &a, x->cu_val, 1, y->cu_val, 1, cu_val, m));
+}
+
+void Dense::getRow(Dense*d, int r, bool column) {
+	d->clean();
+	if (!column)
+		d->initial(1, n);
+	else
+		d->initial(n, 1);
+	int thread = THREADS;
+	int block = (n + thread - 1) / thread;
+	getRowKernel<<<block, thread>>>(cu_val, d->cu_val, r, m, n);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::getRow(Dense*d, int r) {
+	getRow(d, r, false);
+}
+
+void Dense::keepCol(Dense*r, int*col, int n) {
+	r->clean();
+	r->initial(this->m, this->n);
+	r->setValue(0.0);
+	int*cu_col;
+	size_t size = sizeof(int) * n;
+	checkCudaErrors(cudaMalloc((void** ) &cu_col, size));
+	checkCudaErrors(cudaMemcpy(cu_col, col, size, cudaMemcpyHostToDevice));
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((this->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	keepColKernel<<<numBlocks, threadsPerBlock>>>(cu_val, r->cu_val, cu_col,
+			this->m, n);
+	checkCudaErrors(cudaDeviceSynchronize());
+	checkCudaErrors(cudaFree(cu_col));
+}
+
+void Dense::initial(int m, int n) {
+	this->m = m;
+	this->n = n;
+	//printf("m=%d,n=%d\n", m, n);
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
+	val = thrust::device_pointer_cast(cu_val);
+}
+
+void Dense::input(const char* filename) {
+	FILE* file = fopen(filename, "r");
+	fscanf(file, "%d %d", &m, &n);
+	size_t size = sizeof(double) * m * n;
+	double*elem = (double*) malloc(size);
+	//int len = m*n;
+	int i, j;
+	for (i = 0; i < m; ++i)
+		for (j = 0; j < n; ++j)
+			fscanf(file, "%lf", &elem[i + j * m]);
+	//PRINT_MATRIX(val,m,n);
+	checkCudaErrors(cudaMalloc((void** ) &cu_val, sizeof(double) * m * n));
+	checkCudaErrors(cudaMemcpy(cu_val, elem, size, cudaMemcpyHostToDevice));
+	val = thrust::device_pointer_cast(cu_val);
+	fclose(file);
+	free(elem);
+}
+
+void Dense::inv(Dense*B) {
+	if (m != n) {
+		printf("not square\n");
+		return;
+	}
+	B->clean();
+	B->initial(m, m);
+	B->setIdentity();
+	solve(B);
+}
+
+void Dense::ltimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
+	r->clean();
+	int m, n;
+	m = (tA) ? A->n : A->m;
+	n = (trans) ? this->m : this->n;
+	r->initial(m, n);
+	r->times(A, this, 0.0f, alpha, tA, trans);
+}
+
+void Dense::ltimes(Dense*A, double alpha, bool trans, bool tA) {
+	Dense*r = new Dense;
+	ltimes(r, A, alpha, trans, tA);
+	r->clone(this);
+	delete r;
+}
+
+double Dense::norm2() {
+	double n2;
+//cublasSdot(handle, m, cu_val, 1, cu_val, 1, &n2);
+	checkCudaErrors(cublasDnrm2(handle, length(), cu_val, 1, &n2));
+	return n2;
+}
+
+double Dense::norm1() {
+	double n1;
+	checkCudaErrors(cublasDasum(handle, length(), cu_val, 1, &n1));
+	return n1;
 }
 
 void Dense::orth() {
@@ -357,17 +440,6 @@ void Dense::orth() {
 		checkCudaErrors(cudaFree(tau));
 }
 
-void Dense::inv(Dense*B) {
-	if (m != n) {
-		printf("not square\n");
-		return;
-	}
-	B->clean();
-	B->initial(m, m);
-	B->setIdentity();
-	solve(B);
-}
-
 void Dense::pinv(Dense*B, double tol) {
 	Dense*U = new Dense;
 	Dense*V = new Dense;
@@ -380,60 +452,6 @@ void Dense::pinv(Dense*B, double tol) {
 	delete U;
 	delete V;
 	delete S;
-}
-
-void Dense::recip() {
-	thrust::transform(val, val + length(), val, recipOp(1e-10));
-}
-
-void Dense::truncation(int k) {
-	if (k > m || k > n) {
-		printf("k is larger than m or n\n");
-		return;
-	}
-	Dense*U = new Dense;
-	Dense*V = new Dense;
-	Dense*S = new Dense;
-	svd(U, V, S);
-	thrust::fill(S->val + k, S->val + S->length(), 0);
-	U->timesDiag(this, S, 1.0, false, V->m);
-	rtimes(V, 1.0, false, true);
-	delete U;
-	delete V;
-	delete S;
-//	S->sor
-}
-
-void Dense::svd(Dense*U, Dense*V, Dense*S) {
-	Dense*T = new Dense;
-	if (m < n) {
-		transpose(T);
-		T->svd(V, U, S);
-//		U->transpose();
-		delete T;
-		return;
-	}
-	clone(T);
-	U->clean();
-	U->initial(m, m);
-	V->clean();
-	V->initial(n, n);
-	S->clean();
-	S->initial(m, 1);
-	S->setValue(0);
-	int lwork = 0;
-	checkCudaErrors(cusolverDnDgesvd_bufferSize(solver_handle, m, n, &lwork));
-	double*work = 0;
-	double*rwork = 0;
-	int*devInfo = 0;
-	checkCudaErrors(cudaMalloc((void** )&devInfo, sizeof(int)));
-	checkCudaErrors(cudaMalloc((void** )&work, sizeof(double) * lwork));
-	checkCudaErrors(
-			cusolverDnDgesvd(solver_handle, 'A', 'A', m, n, T->cu_val, m,
-					S->cu_val, U->cu_val, m, V->cu_val, n, work, lwork, rwork,
-					devInfo));
-	V->transpose();
-	delete T;
 }
 
 void Dense::print() {
@@ -457,193 +475,6 @@ void Dense::print(const char* filename) {
 	}
 	out.close();
 }
-
-void Dense::gemv(Dense*x, Dense*y, double alpha, double beta, bool trans) {
-	if (trans)
-		checkCudaErrors(
-				cublasDgemv(handle, CUBLAS_OP_T, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
-	else
-		checkCudaErrors(
-				cublasDgemv(handle, CUBLAS_OP_N, m, n, &alpha, cu_val, m, x->cu_val, 1, &beta, y->cu_val, 1));
-}
-
-void Dense::timesVec(Dense*r, Dense*v, bool trans) {
-	r->clean();
-	if (trans)
-		r->initial(n, 1);
-	else
-		r->initial(m, 1);
-	gemv(v, r, 1.0f, 0.0f, trans);
-}
-
-void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left, int n) {
-	r->clean();
-	if (left)
-		r->initial(this->n, n);
-	else
-		r->initial(this->m, n);
-	r->setValue(0);
-	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-	dim3 numBlocks((r->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-			(r->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
-			d->cu_val, r->m, r->n, left ? this->m : this->n, alpha, left);
-	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left) {
-	int n = left ? this->m : this->n;
-	timesDiag(r, d, alpha, left, n);
-//	r->clean();
-//	r->initial(m, n);
-//	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-//	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-//			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-//	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
-//			d->cu_val, m, n, alpha, left);
-//	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::times(Dense*A, Dense*B, double alpha, double beta, bool tA,
-		bool tB) {
-	int k;
-	if (tA) {
-		k = A->m;
-		if (tB)
-			checkCudaErrors(
-					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
-		else
-			checkCudaErrors(
-					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
-	} else {
-		k = A->n;
-		if (tB)
-			checkCudaErrors(
-					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
-		else
-			checkCudaErrors(
-					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
-	}
-}
-
-void Dense::times(Dense*r, double a) {
-	r->clean();
-	r->initial(m, n);
-	thrust::transform(val, val + length(), r->val, multiconstOp(a));
-}
-void Dense::times(double a) {
-	thrust::transform(val, val + length(), val, multiconstOp(a));
-}
-
-void Dense::eTimes(Dense* d, double a) {
-	thrust::transform(val, val + length(), d->val, val, multiplyOp(a));
-}
-
-void Dense::eTimes(Dense*d) {
-	eTimes(d, 1.0f);
-}
-
-void Dense::eTimes(Dense*r, Dense*d, double a) {
-	r->clean();
-	r->initial(m, n);
-	thrust::transform(val, val + length(), d->val, r->val, multiplyOp(a));
-}
-
-void Dense::eDiv(Dense*d) {
-	thrust::transform(val, val + length(), d->val, val, divideOp());
-//	int thread = THREADS;
-//	int len = length();
-//	int block = (len + thread - 1) / thread;
-//	eDivKernel<<<block, thread>>>(cu_val, d->cu_val, len);
-//	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::rtimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
-	r->clean();
-	int m, n;
-	m = (trans) ? this->n : this->m;
-	n = (tA) ? A->m : A->n;
-	r->initial(m, n);
-	r->times(this, A, 0.0f, alpha, trans, tA);
-}
-
-void Dense::rtimes(Dense*A, double alpha, bool trans, bool tA) {
-	Dense*r = new Dense;
-	rtimes(r, A, alpha, trans, tA);
-	r->clone(this);
-	delete r;
-}
-
-void Dense::ltimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
-	r->clean();
-	int m, n;
-	m = (tA) ? A->n : A->m;
-	n = (trans) ? this->m : this->n;
-	r->initial(m, n);
-	r->times(A, this, 0.0f, alpha, tA, trans);
-}
-
-void Dense::ltimes(Dense*A, double alpha, bool trans, bool tA) {
-	Dense*r = new Dense;
-	ltimes(r, A, alpha, trans, tA);
-	r->clone(this);
-	delete r;
-}
-//void Dense::times(Dense*r, Dense* d, bool tA, bool tB) {
-////	int m = this->m;
-////	int k = this->n;
-////	int n = d->n;
-//	r->clean();
-//	int m, n, k;
-//	r->clean();
-//	if (tA) {
-//		m = this->n;
-//		k = this->m;
-//		if (tB) {
-//			n = d->m;
-//			r->initial(m, n);
-//			checkCudaErrors(
-//					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
-//		} else {
-//			n = d->n;
-//			r->initial(m, n);
-//			checkCudaErrors(
-//					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
-//		}
-//	} else {
-//		m = this->m;
-//		k = this->n;
-//		if (tB) {
-//			n = d->m;
-//			r->initial(m, n);
-//			checkCudaErrors(
-//					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
-//		} else {
-//			n = d->n;
-//			r->initial(m, n);
-//			checkCudaErrors(
-//					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
-//		}
-//	}
-//}
-
-//void Dense::plus(Dense*addend, float a) {
-//	Dense*r = new Dense;
-//	plus(r, addend, 1.0f, a);
-//	r->clone(this);
-//	delete r;
-//}
-//
-//void Dense::plus(Dense*addend, float a, float b) {
-//	Dense*r = new Dense;
-//	plus(r, addend, a, b);
-//	r->clone(this);
-//	delete r;
-//}
-//
-//void Dense::plus(Dense* res, Dense* addend, float a, float b) {
-//	plus(res, addend, a, b, false, false);
-//}
 
 void Dense::plus(double alpha, double beta) {
 	Dense* ones = new Dense;
@@ -721,6 +552,173 @@ void Dense::plusDiag(double a, double b) {
 	delete I;
 }
 
+void Dense::project() {
+	int thread = THREADS;
+	int len = length();
+	int block = (len + thread - 1) / thread;
+	projectKernel<<<block, thread>>>(cu_val, len);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::pow(double ind) {
+	thrust::transform(val, val + length(), val, powerOp(ind));
+}
+
+void Dense::recip() {
+	thrust::transform(val, val + length(), val, recipOp(1e-10));
+}
+
+void Dense::rowSquare(Dense*r) {
+	Dense*m = new Dense;
+	this->clone(m);
+	m->eTimes(m);
+	m->rowSum(r);
+	delete m;
+}
+void Dense::rowSum() {
+	Dense*n = new Dense;
+	Dense*nn = new Dense;
+	rowSum(n);
+	n->repmat(nn, 1, this->n);
+	eDiv(nn);
+	delete n;
+	delete nn;
+}
+
+void Dense::rowSum(Dense* vec) {
+	Dense* one = new Dense;
+	one->initial(n, 1);
+	one->setValue(1.0f);
+	vec->clean();
+	vec->initial(m, 1);
+	checkCudaErrors(
+			cublasDgemv(handle, CUBLAS_OP_N, m, n, &ONE, cu_val, m, one->cu_val, 1, &ZERO, vec->cu_val, 1));
+	delete one;
+}
+
+void Dense::rowNorm(Dense*r) {
+	rowSquare(r);
+	r->square_root();
+}
+void Dense::rowNorm() {
+	Dense*n = new Dense;
+	Dense*nn = new Dense;
+	rowNorm(n);
+	n->repmat(nn, 1, this->n);
+	eDiv(nn);
+	delete n;
+	delete nn;
+}
+
+void Dense::rtimes(Dense*r, Dense*A, double alpha, bool trans, bool tA) {
+	r->clean();
+	int m, n;
+	m = (trans) ? this->n : this->m;
+	n = (tA) ? A->m : A->n;
+	r->initial(m, n);
+	r->times(this, A, 0.0f, alpha, trans, tA);
+}
+
+void Dense::rtimes(Dense*A, double alpha, bool trans, bool tA) {
+	Dense*r = new Dense;
+	rtimes(r, A, alpha, trans, tA);
+	r->clone(this);
+	delete r;
+}
+
+void Dense::rbind(Dense*r, Dense*d, double a, double b) {
+	if (n != d->n) {
+		printf("column not match\n");
+		return;
+	}
+	r->clean();
+	r->initial(m + d->m, n);
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((r->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(r->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	rbindKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val, d->cu_val, m,
+			d->m, n, a, b);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::rbind(Dense*d, double a, double b) {
+	Dense*r = new Dense;
+	rbind(r, d, a, b);
+	r->clone(this);
+	delete r;
+}
+
+void Dense::repmat(Dense*d, int m, int n) {
+	d->clean();
+	d->initial(m * this->m, n * this->n);
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((d->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(d->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	repmatKernel<<<numBlocks, threadsPerBlock>>>(d->cu_val, cu_val, d->m, d->n,
+			this->m, this->n);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::scale(double a) {
+	int len = length();
+	checkCudaErrors(cublasDscal(handle, len, &a, cu_val, 1));
+}
+
+void Dense::setRandom() {
+	curandGenerator_t gen;
+	CURAND_CALL(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT));
+	CURAND_CALL(curandSetPseudoRandomGeneratorSeed(gen, 123ULL));
+	CURAND_CALL(curandGenerateUniformDouble(gen, cu_val, length()));
+	CURAND_CALL(curandDestroyGenerator(gen));
+}
+
+void Dense::setValue(double v) {
+	thrust::fill(val, val + m * n, v);
+}
+
+void Dense::setDiagValue(double v) {
+	int size = fminf(m, n);
+	for (int i = 0; i < size; ++i)
+		val[i + i * m] = v;
+}
+
+void Dense::setIdentity(int s) {
+	initial(s, s);
+	setValue(0.0f);
+	for (int i = 0; i < s; ++i)
+		val[i * s + i] = 1;
+}
+
+void Dense::setIdentity() {
+	setValue(0.0f);
+	setDiagValue(1.0f);
+}
+
+void Dense::setElem(int i, int j, double v) {
+	val[i + j * m] = v;
+}
+
+double Dense::square() {
+	double n = norm2();
+	return n * n;
+}
+
+void Dense::square_root() {
+	pow(0.5);
+}
+
+double Dense::sum() {
+	Dense* vec = new Dense;
+	rowSum(vec);
+	Dense* ones = new Dense;
+	ones->initial(m, 1);
+	ones->setValue(1.0f);
+	double s = vec->dot(ones);
+	delete vec;
+	delete ones;
+	return s;
+}
+
 void Dense::solve(Dense*x) {
 	int size = 0;
 	double* buffer = 0;
@@ -756,72 +754,34 @@ void Dense::solve(Dense*x) {
 	checkCudaErrors(cudaFree(info));
 }
 
-void Dense::scale(double a) {
-	int len = length();
-	checkCudaErrors(cublasDscal(handle, len, &a, cu_val, 1));
-}
-
-double Dense::trace(Dense*d) {
-	Dense* r = new Dense;
-	transpose(r);
-	r->eTimes(d);
-	Dense* v = new Dense;
-	r->rowSum(v);
-	double sum = v->sum();
-	delete r;
-	delete v;
-	return sum;
-}
-
-double Dense::sum() {
-	Dense* vec = new Dense;
-	rowSum(vec);
-	Dense* ones = new Dense;
-	ones->initial(m, 1);
-	ones->setValue(1.0f);
-	double s = vec->dot(ones);
-	delete vec;
-	delete ones;
-	return s;
-}
-
-double Dense::frobenius() {
-	double n = norm2();
-	return n * n;
-}
-
-double Dense::norm2() {
-	double n2;
-//cublasSdot(handle, m, cu_val, 1, cu_val, 1, &n2);
-	checkCudaErrors(cublasDnrm2(handle, length(), cu_val, 1, &n2));
-	return n2;
-}
-
-double Dense::norm1() {
-	double n1;
-	checkCudaErrors(cublasDasum(handle, length(), cu_val, 1, &n1));
-	return n1;
-}
-
-double Dense::square() {
-	double n = norm2();
-	return n * n;
-}
-
-void Dense::getCol(Dense*d, int c) {
-	d->clean();
-	d->initial(m, 1);
-	checkCudaErrors(
-			cudaMemcpy(d->cu_val, &cu_val[c * m], sizeof(double) * m,
-					cudaMemcpyDeviceToDevice));
-}
-
 void Dense::setCol(Dense*d, int c) {
 	checkCudaErrors(
 			cudaMemcpy(&cu_val[c * m], d->cu_val, sizeof(double) * m,
 					cudaMemcpyDeviceToDevice));
 }
 
+void Dense::setRow(Dense*d, int r) {
+	int thread = THREADS;
+	int block = (n + thread - 1) / thread;
+	setRowKernel<<<block, thread>>>(cu_val, d->cu_val, r, m, n);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::shrink(double tau) {
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	shrinkKernel<<<numBlocks, threadsPerBlock>>>(tau, cu_val, m, n);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
+
+void Dense::signPlus(Dense*s, double v) {
+	int thread = THREADS;
+	int len = length();
+	int block = (len + thread - 1) / thread;
+	signPlusKernel<<<block, thread>>>(cu_val, s->cu_val, v, len);
+	checkCudaErrors(cudaDeviceSynchronize());
+}
 thrust::device_ptr<int> Dense::sortKeyCol(bool greater) {
 	int len = m * n;
 	thrust::device_ptr<int> order = thrust::device_malloc<int>(len);
@@ -850,88 +810,245 @@ thrust::device_ptr<int> Dense::sortKeyRow(bool greater) {
 	return order;
 }
 
-void Dense::getRow(Dense*d, int r, bool column) {
-	d->clean();
-	if (!column)
-		d->initial(1, n);
-	else
-		d->initial(n, 1);
-	int thread = THREADS;
-	int block = (n + thread - 1) / thread;
-	getRowKernel<<<block, thread>>>(cu_val, d->cu_val, r, m, n);
+void Dense::sub(Dense*r, int rs, int re, int cs, int ce) {
+	r->clean();
+	int m = re - rs;
+	int n = ce - cs;
+	r->initial(m, n);
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	subKernel<<<numBlocks, threadsPerBlock>>>(cu_val, r->cu_val, rs, re, cs, ce,
+			this->m);
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::getRow(Dense*d, int r) {
-	getRow(d, r, false);
-}
+void Dense::subCol(Dense*r, int* col, int n) {
+	r->clean();
+	r->initial(this->m, n);
+	int*cu_col;
+	size_t size = sizeof(int) * n;
+	checkCudaErrors(cudaMalloc((void** ) &cu_col, size));
+	checkCudaErrors(cudaMemcpy(cu_col, col, size, cudaMemcpyHostToDevice));
 
-void Dense::setRow(Dense*d, int r) {
-	int thread = THREADS;
-	int block = (n + thread - 1) / thread;
-	setRowKernel<<<block, thread>>>(cu_val, d->cu_val, r, m, n);
+	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+	dim3 numBlocks((this->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+	subColKernel<<<numBlocks, threadsPerBlock>>>(cu_val, r->cu_val, cu_col,
+			this->m, n);
 	checkCudaErrors(cudaDeviceSynchronize());
+	checkCudaErrors(cudaFree(cu_col));
 }
 
-void Dense::diag(Dense*d) {
-	d->clean();
-	if (m == 1 || n == 1) {
-		int l = m * n;
-		d->initial(l, l);
-		d->setValue(0.0f);
-		for (int i = 0; i < l; ++i)
-			d->val[i * l + i] = val[i];
-	} else {
-		d->initial(m, 1);
-		for (int i = 0; i < m; ++i)
-			d->val[i] = val[i * m + i];
-	}
-}
-
-void Dense::rbind(Dense*r, Dense*d, double a, double b) {
-	if (n != d->n) {
-		printf("column not match\n");
+void Dense::svd(Dense*U, Dense*V, Dense*S) {
+	Dense*T = new Dense;
+	if (m < n) {
+		transpose(T);
+		T->svd(V, U, S);
+//		U->transpose();
+		delete T;
 		return;
 	}
+	clone(T);
+	U->clean();
+	U->initial(m, m);
+	V->clean();
+	V->initial(n, n);
+	S->clean();
+	S->initial(m, 1);
+	S->setValue(0);
+	int lwork = 0;
+	checkCudaErrors(cusolverDnDgesvd_bufferSize(solver_handle, m, n, &lwork));
+	double*work = 0;
+	double*rwork = 0;
+	int*devInfo = 0;
+	checkCudaErrors(cudaMalloc((void** )&devInfo, sizeof(int)));
+	checkCudaErrors(cudaMalloc((void** )&work, sizeof(double) * lwork));
+	checkCudaErrors(
+			cusolverDnDgesvd(solver_handle, 'A', 'A', m, n, T->cu_val, m,
+					S->cu_val, U->cu_val, m, V->cu_val, n, work, lwork, rwork,
+					devInfo));
+	V->transpose();
+	delete T;
+}
+
+void Dense::transpose(Dense* trans) {
+	int m = this->n;
+	int n = this->m;
+	trans->clean();
+	trans->initial(m, n);
+	//checkCudaErrors(cublasSetPointerMode(handle, CUBLAS_POINTER_MODE_HOST));
+	checkCudaErrors(
+			cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, &ONE, cu_val,
+					this->m, &ZERO, cu_val, this->m, trans->cu_val, trans->m));
+}
+
+void Dense::transpose() {
+	Dense* trans = new Dense;
+	transpose(trans);
+	clean();
+	trans->clone(this);
+	delete trans;
+}
+
+void Dense::truncation(int k) {
+	if (k > m || k > n) {
+		printf("k is larger than m or n\n");
+		return;
+	}
+	Dense*U = new Dense;
+	Dense*V = new Dense;
+	Dense*S = new Dense;
+	svd(U, V, S);
+	thrust::fill(S->val + k, S->val + S->length(), 0);
+	U->timesDiag(this, S, 1.0, false, V->m);
+	rtimes(V, 1.0, false, true);
+	delete U;
+	delete V;
+	delete S;
+//	S->sor
+}
+
+void Dense::timesVec(Dense*r, Dense*v, bool trans) {
 	r->clean();
-	r->initial(m + d->m, n);
+	if (trans)
+		r->initial(n, 1);
+	else
+		r->initial(m, 1);
+	gemv(v, r, 1.0f, 0.0f, trans);
+}
+
+void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left, int n) {
+	r->clean();
+	if (left)
+		r->initial(this->n, n);
+	else
+		r->initial(this->m, n);
+	r->setValue(0);
 	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
 	dim3 numBlocks((r->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
 			(r->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	rbindKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val, d->cu_val, m,
-			d->m, n, a, b);
+	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
+			d->cu_val, r->m, r->n, left ? this->m : this->n, alpha, left);
 	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::rbind(Dense*d, double a, double b) {
-	Dense*r = new Dense;
-	rbind(r, d, a, b);
-	r->clone(this);
-	delete r;
+void Dense::timesDiag(Dense*r, Dense*d, double alpha, bool left) {
+	int n = left ? this->m : this->n;
+	timesDiag(r, d, alpha, left, n);
+//	r->clean();
+//	r->initial(m, n);
+//	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
+//	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
+//			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+//	timesDiagKernel<<<numBlocks, threadsPerBlock>>>(r->cu_val, cu_val,
+//			d->cu_val, m, n, alpha, left);
+//	checkCudaErrors(cudaDeviceSynchronize());
 }
 
-void Dense::cbind(Dense*r, Dense*d, double a, double b) {
-	if (m != d->m) {
-		printf("row not match\n");
-		return;
+void Dense::times(Dense*A, Dense*B, double alpha, double beta, bool tA,
+		bool tB) {
+	int k;
+	if (tA) {
+		k = A->m;
+		if (tB)
+			checkCudaErrors(
+					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+		else
+			checkCudaErrors(
+					cublasDgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+	} else {
+		k = A->n;
+		if (tB)
+			checkCudaErrors(
+					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
+		else
+			checkCudaErrors(
+					cublasDgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &beta, A->cu_val, A->m, B->cu_val, B->m, &alpha, cu_val, m));
 	}
-	r->clean();
-	r->initial(m, n + d->n);
-//	checkCudaErrors(cublasDcopy(handle, m*n, cu_val, 1, r->cu_val, 1));
-//	checkCudaErrors(
-//			cublasDcopy(handle, m*d->n, d->cu_val, 1, r->cu_val + m*n, 1));
-	thrust::transform(val, val + length(), r->val, multiconstOp(a));
-	thrust::transform(d->val, d->val + d->length(), r->val + m * n,
-			multiconstOp(b));
-//	thrust::transform(r->val, r->val + m * n, multiply_const(a));
-//	thrust::transform(r->val + m * n, r->val + m * r->n, multiply_const(b));
 }
 
-void Dense::cbind(Dense*d, double a, double b) {
-	Dense*r = new Dense;
-	cbind(r, d, a, b);
-	r->clone(this);
+void Dense::times(Dense*r, double a) {
+	r->clean();
+	r->initial(m, n);
+	thrust::transform(val, val + length(), r->val, multiconstOp(a));
+}
+void Dense::times(double a) {
+	thrust::transform(val, val + length(), val, multiconstOp(a));
+}
+
+//void Dense::times(Dense*r, Dense* d, bool tA, bool tB) {
+////	int m = this->m;
+////	int k = this->n;
+////	int n = d->n;
+//	r->clean();
+//	int m, n, k;
+//	r->clean();
+//	if (tA) {
+//		m = this->n;
+//		k = this->m;
+//		if (tB) {
+//			n = d->m;
+//			r->initial(m, n);
+//			checkCudaErrors(
+//					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_T, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
+//		} else {
+//			n = d->n;
+//			r->initial(m, n);
+//			checkCudaErrors(
+//					cublasSgemm(handle, CUBLAS_OP_T, CUBLAS_OP_N, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
+//		}
+//	} else {
+//		m = this->m;
+//		k = this->n;
+//		if (tB) {
+//			n = d->m;
+//			r->initial(m, n);
+//			checkCudaErrors(
+//					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_T, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
+//		} else {
+//			n = d->n;
+//			r->initial(m, n);
+//			checkCudaErrors(
+//					cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &ONE, cu_val, this->m, d->cu_val, d->m, &ZERO, r->cu_val, m));
+//		}
+//	}
+//}
+
+//void Dense::plus(Dense*addend, float a) {
+//	Dense*r = new Dense;
+//	plus(r, addend, 1.0f, a);
+//	r->clone(this);
+//	delete r;
+//}
+//
+//void Dense::plus(Dense*addend, float a, float b) {
+//	Dense*r = new Dense;
+//	plus(r, addend, a, b);
+//	r->clone(this);
+//	delete r;
+//}
+//
+//void Dense::plus(Dense* res, Dense* addend, float a, float b) {
+//	plus(res, addend, a, b, false, false);
+//}
+
+//struct square_root: public thrust::unary_function<float, float> {
+//	__host__ __device__
+//	float operator()(float x) const {
+//		return sqrtf(x);
+//	}
+//};
+double Dense::trace(Dense*d) {
+	Dense* r = new Dense;
+	transpose(r);
+	r->eTimes(d);
+	Dense* v = new Dense;
+	r->rowSum(v);
+	double sum = v->sum();
 	delete r;
+	delete v;
+	return sum;
 }
 
 Dense::~Dense() {
@@ -1736,66 +1853,5 @@ void Sparse::eTimes(Dense*r, Sparse*s) {
 			s->cu_row_index, s->cu_col, s->cu_val, r->cu_val, m, n);
 	checkCudaErrors(cudaDeviceSynchronize());
 	r->transpose();
-}
-
-void Dense::signPlus(Dense*s, double v) {
-	int thread = THREADS;
-	int len = length();
-	int block = (len + thread - 1) / thread;
-	signPlusKernel<<<block, thread>>>(cu_val, s->cu_val, v, len);
-	checkCudaErrors(cudaDeviceSynchronize());
-}
-//struct square_root: public thrust::unary_function<float, float> {
-//	__host__ __device__
-//	float operator()(float x) const {
-//		return sqrtf(x);
-//	}
-//};
-void Dense::square_root() {
-	pow(0.5);
-}
-
-void Dense::pow(double ind) {
-	thrust::transform(val, val + length(), val, powerOp(ind));
-}
-
-void Dense::project() {
-	int thread = THREADS;
-	int len = length();
-	int block = (len + thread - 1) / thread;
-	projectKernel<<<block, thread>>>(cu_val, len);
-	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::shrink(double tau) {
-	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	shrinkKernel<<<numBlocks, threadsPerBlock>>>(tau, cu_val, m, n);
-	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::repmat(Dense*d, int m, int n) {
-	d->clean();
-	d->initial(m * this->m, n * this->n);
-	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-	dim3 numBlocks((d->m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-			(d->n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	repmatKernel<<<numBlocks, threadsPerBlock>>>(d->cu_val, cu_val, d->m, d->n,
-			this->m, this->n);
-	checkCudaErrors(cudaDeviceSynchronize());
-}
-
-void Dense::sub(Dense*d, int rs, int re, int cs, int ce) {
-	d->clean();
-	int m = re - rs;
-	int n = ce - cs;
-	d->initial(m, n);
-	dim3 threadsPerBlock(PER_THREADS, PER_THREADS);
-	dim3 numBlocks((m + threadsPerBlock.x - 1) / threadsPerBlock.x,
-			(n + threadsPerBlock.y - 1) / threadsPerBlock.y);
-	subKernel<<<numBlocks, threadsPerBlock>>>(cu_val, d->cu_val, rs, re, cs, ce,
-			this->m);
-	checkCudaErrors(cudaDeviceSynchronize());
 }
 

@@ -68,11 +68,11 @@ public:
 	double frobenius();
 	void getCol(Dense*d, int c);
 	double getElem(int i, int j);
-	void getRow(Dense*d, int r,bool column);
+	void getRow(Dense*d, int r, bool column);
 	void getRow(Dense*d, int r);
 	void gemv(Dense*x, Dense*y, double alpha, double beta, bool trans);
 	void ger(Dense*x, Dense*y, double);
-public:
+	void keepCol(Dense*r,int*, int n);
 	int length() {
 		return m * n;
 	}
@@ -102,8 +102,10 @@ public:
 	void recip();
 	void repmat(Dense*, int, int);
 	void rowNorm(Dense*);
+	void rowNorm();
 	void rowSquare(Dense*);
 	void rowSum(Dense*);
+	void rowSum();
 	void rtimes(Dense*A, double alpha, bool trans, bool tA);
 	void rtimes(Dense*r, Dense*A, double alpha, bool trans, bool tA);
 	void scale(double);
@@ -124,6 +126,7 @@ public:
 	double square();
 	void square_root();
 	void sub(Dense*, int rs, int re, int cs, int ce);
+	void subCol(Dense*, int*, int);
 	double sum();
 	void timesDiag(Dense*, Dense*, double alpha, bool left, int n);
 	void timesDiag(Dense*, Dense*, double alpha, bool left);
@@ -177,7 +180,7 @@ public:
 	void clean();
 	void clone(Sparse*);
 	void colNorm();
-	void colNorm(Dense*,bool normed);
+	void colNorm(Dense*, bool normed);
 	void colSum(Dense*);
 	void colVec(Dense*d, int c, bool row);
 	void colVec(Dense*d, int c);
@@ -204,7 +207,7 @@ public:
 	void readCSR(const char*);
 	void rowMultiply(double);
 	void rowNorm();
-	void rowNorm(Dense*,bool normed);
+	void rowNorm(Dense*, bool normed);
 	void rowSum(Dense*);
 	void rowVec(Dense*d, int r, bool column);
 	void rowVec(Dense*d, int r);
